@@ -60,6 +60,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get songs => 'Songs';
 
   @override
+  String get home => 'Home';
+
+  @override
   String get playlists => 'Playlists';
 
   @override

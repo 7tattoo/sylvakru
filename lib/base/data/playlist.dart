@@ -59,21 +59,17 @@ class PlaylistManager {
   }
 
   Future<void> load() async {
-    List<dynamic> localPlaylists = jsonDecode(await _localFile.readAsString());
+    final localPlaylists = await readJsonListFile(_localFile);
     for (String name in localPlaylists) {
       addPlaylist(Playlist(name: name));
     }
 
-    List<dynamic> webdavPlaylists = jsonDecode(
-      await _webdavFile.readAsString(),
-    );
+    final webdavPlaylists = await readJsonListFile(_webdavFile);
     for (String name in webdavPlaylists) {
       playlistsMap[name]!.setWebdavFile();
     }
 
-    List<dynamic> subsonicPlaylists = jsonDecode(
-      await _subsonicFile.readAsString(),
-    );
+    final subsonicPlaylists = await readJsonListFile(_subsonicFile);
     for (final map in subsonicPlaylists) {
       String? id = map['id'];
       String name = map['name'];
@@ -81,9 +77,7 @@ class PlaylistManager {
       playlistsMap[name]!.setSubsonicFile();
     }
 
-    List<dynamic> navidromePlaylists = jsonDecode(
-      await _navidromeFile.readAsString(),
-    );
+    final navidromePlaylists = await readJsonListFile(_navidromeFile);
     for (final map in navidromePlaylists) {
       String? id = map['id'];
       String name = map['name'];
@@ -91,7 +85,7 @@ class PlaylistManager {
       playlistsMap[name]!.setNavidromeFile();
     }
 
-    List<dynamic> embyPlaylists = jsonDecode(await _embyFile.readAsString());
+    final embyPlaylists = await readJsonListFile(_embyFile);
     for (final map in embyPlaylists) {
       String? id = map['id'];
       String name = map['name'];
@@ -360,8 +354,7 @@ class Playlist {
     if (file == null) {
       return;
     }
-    final contents = await file.readAsString();
-    List<dynamic> decoded = jsonDecode(contents);
+    final decoded = await readJsonListFile(file);
     for (String id in decoded) {
       MyAudioMetadata? song = library.id2Song[id];
       if (song == null) {
@@ -623,9 +616,7 @@ class Playlist {
   }
 
   void loadSetting() {
-    final content = _settingFile.readAsStringSync();
-    final Map<String, dynamic> json =
-        jsonDecode(content) as Map<String, dynamic>;
+    final json = readJsonMapFileSync(_settingFile);
 
     for (final sourceType in SourceType.values) {
       songListManager.getSortTypeNotifier2(sourceType).value =

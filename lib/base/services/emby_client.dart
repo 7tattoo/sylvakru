@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:sylvakru/base/services/logger.dart';
+import 'package:sylvakru/base/services/network_error_reporter.dart';
 
 EmbyClient? embyClient;
 
@@ -77,9 +78,12 @@ class EmbyClient {
         logger.output(e.response!.data.toString());
       }
 
+      reportNetworkError('Emby', e.message ?? 'network error');
+
       return null;
     } catch (e) {
       logger.output('[Emby] Unknown error: $e');
+      reportNetworkError('Emby', e.toString());
       return null;
     }
   }

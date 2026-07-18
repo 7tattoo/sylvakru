@@ -112,9 +112,7 @@ class Library {
   }
 
   Future<void> _initLocalFolders() async {
-    List<dynamic> folderIdList = jsonDecode(
-      await _localFolderIdListFile.readAsString(),
-    );
+    final folderIdList = await readJsonListFile(_localFolderIdListFile);
 
     for (final id in folderIdList) {
       localFolderList.add(await Folder.from(id, false));
@@ -122,9 +120,7 @@ class Library {
   }
 
   Future<void> _initWebdavFolders() async {
-    List<dynamic> folderIdList = jsonDecode(
-      await _webdavFolderIdListFile.readAsString(),
-    );
+    final folderIdList = await readJsonListFile(_webdavFolderIdListFile);
 
     for (final id in folderIdList) {
       webdavFolderList.add(await Folder.from(id, true));
@@ -137,9 +133,9 @@ class Library {
   }
 
   Future<void> loadFonts() async {
-    _fontMap =
-        (jsonDecode(_fontMapFile.readAsStringSync()) as Map<String, dynamic>)
-            .map((key, value) => MapEntry(key, List<String>.from(value)));
+    _fontMap = readJsonMapFileSync(
+      _fontMapFile,
+    ).map((key, value) => MapEntry(key, List<String>.from(value)));
     for (final entry in _fontMap.entries) {
       final name = entry.key;
       final fontPathList = entry.value;
@@ -780,8 +776,8 @@ class Library {
           pathAndModified.addAll(folder.pathAndModified);
         }
 
-        final List<dynamic> songIdList = jsonDecode(
-          await _getSongIdListFile(sourceType).readAsString(),
+        final songIdList = await readJsonListFile(
+          _getSongIdListFile(sourceType),
         );
 
         final pool = Pool(6);

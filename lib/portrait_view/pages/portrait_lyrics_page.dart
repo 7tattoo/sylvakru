@@ -38,6 +38,8 @@ class PortraitLyricsPage extends StatefulWidget {
 class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
   final dragOffsetNotifier = ValueNotifier(0.0);
 
+  final canDragNotifier = ValueNotifier(false);
+
   int _animationDuration = 0;
 
   Timer? concealRouteTimer;
@@ -47,52 +49,78 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
   @override
   void initState() {
     super.initState();
-    if (Platform.isAndroid) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await Future.delayed(Duration(milliseconds: 500));
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future.delayed(Duration(milliseconds: 500));
+      if (Platform.isAndroid) {
         enableAllNotifier.value = true;
-      });
-    }
+      }
+      canDragNotifier.value = true;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.heightOf(context);
 
-    return GestureDetector(
-      onVerticalDragStart: (_) {
-        concealRouteTimer?.cancel();
-        final route = ModalRoute.of(context);
-        if (route is DynamicLyricsPageRoute) {
-          route.revealRoutesBelow();
-        }
-      },
-      onVerticalDragUpdate: (details) {
-        _animationDuration = 0;
-        dragOffsetNotifier.value += details.delta.dy;
-        dragOffsetNotifier.value = dragOffsetNotifier.value.clamp(
-          0.0,
-          screenHeight,
+    return ValueListenableBuilder(
+      valueListenable: canDragNotifier,
+      builder: (context, value, child) {
+        return GestureDetector(
+          onVerticalDragStart: value
+              ? (_) {
+                  concealRouteTimer?.cancel();
+                  final route = ModalRoute.of(context);
+                  if (route is DynamicLyricsPageRoute) {
+                    route.revealRoutesBelow();
+                  }
+                }
+              : null,
+          onVerticalDragUpdate: value
+              ? (details) {
+                  _animationDuration = 0;
+                  dragOffsetNotifier.value += details.delta.dy;
+                  dragOffsetNotifier.value = dragOffsetNotifier.value.clamp(
+                    0.0,
+                    screenHeight,
+                  );
+                }
+              : null,
+
+          onVerticalDragEnd: value
+              ? (details) {
+                  double velocity = details.primaryVelocity ?? 0;
+
+                  if (dragOffsetNotifier.value * 3 > screenHeight ||
+                      velocity > 500) {
+                    Navigator.pop(context);
+                  } else {
+                    _animationDuration = 250;
+                    dragOffsetNotifier.value = 0.0;
+                    concealRouteTimer = Timer(Duration(milliseconds: 250), () {
+                      final route = ModalRoute.of(context);
+                      if (route is DynamicLyricsPageRoute) {
+                        route.concealRoutesBelow();
+                      }
+                    });
+                  }
+                }
+              : null,
+          onVerticalDragCancel: value
+              ? () {
+                  _animationDuration = 250;
+                  dragOffsetNotifier.value = 0.0;
+                  concealRouteTimer = Timer(Duration(milliseconds: 250), () {
+                    final route = ModalRoute.of(context);
+                    if (route is DynamicLyricsPageRoute) {
+                      route.concealRoutesBelow();
+                    }
+                  });
+                }
+              : null,
+          child: child,
         );
       },
-
-      onVerticalDragEnd: (details) {
-        double velocity = details.primaryVelocity ?? 0;
-
-        if (dragOffsetNotifier.value * 3 > screenHeight || velocity > 500) {
-          Navigator.pop(context);
-        } else {
-          _animationDuration = 250;
-          dragOffsetNotifier.value = 0.0;
-          concealRouteTimer = Timer(Duration(milliseconds: 250), () {
-            final route = ModalRoute.of(context);
-            if (route is DynamicLyricsPageRoute) {
-              route.concealRoutesBelow();
-            }
-          });
-        }
-      },
-
       child: ValueListenableBuilder(
         valueListenable: dragOffsetNotifier,
         builder: (context, value, child) {

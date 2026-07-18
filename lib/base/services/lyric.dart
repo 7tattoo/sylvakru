@@ -140,9 +140,32 @@ Future<void> setParsedLyrics(MyAudioMetadata song) async {
       lines = song.lyrics!.split(RegExp(r'[\n]'));
     }
   }
-  lines.removeWhere((e) => e.isEmpty);
+  applyLrcParsing(
+    result,
+    lines,
+    noLyricsMessage: l10n.noLyrics,
+    parseFailedMessage: l10n.lyricsParseFailed,
+    songDuration: song.duration,
+  );
+}
+
+/// Fills in [result] from already-fetched raw LRC lines: parses word/line
+/// timestamps, detects karaoke (multiple timed tokens per line) and
+/// translation lines (a second line sharing the same timestamp as the one
+/// before it), and falls back to [noLyricsMessage]/[parseFailedMessage]
+/// placeholders when there's nothing to show. Split out from
+/// [setParsedLyrics] so the parsing itself can be unit tested without a
+/// network/file round trip.
+void applyLrcParsing(
+  ParsedLyrics result,
+  List<String> rawLines, {
+  required String noLyricsMessage,
+  required String parseFailedMessage,
+  Duration? songDuration,
+}) {
+  final lines = List<String>.from(rawLines)..removeWhere((e) => e.isEmpty);
   if (lines.isEmpty) {
-    result.lines.add(LyricLine(Duration.zero, l10n.noLyrics, []));
+    result.lines.add(LyricLine(Duration.zero, noLyricsMessage, []));
     return;
   }
 
@@ -195,10 +218,10 @@ Future<void> setParsedLyrics(MyAudioMetadata song) async {
     }
   }
   if (result.lines.isEmpty) {
-    result.lines.add(LyricLine(Duration.zero, l10n.lyricsParseFailed, []));
+    result.lines.add(LyricLine(Duration.zero, parseFailedMessage, []));
   } else {
     if (result.lines.last.tokens.last.end == null) {
-      result.lines.last.tokens.last.end = song.duration;
+      result.lines.last.tokens.last.end = songDuration;
     }
   }
 }

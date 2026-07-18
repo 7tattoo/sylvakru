@@ -60,6 +60,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get songs => '所有歌曲';
 
   @override
+  String get home => '主页';
+
+  @override
   String get playlists => '歌单';
 
   @override

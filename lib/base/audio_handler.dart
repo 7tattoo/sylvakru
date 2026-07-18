@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:sylvakru/base/services/emby_client.dart';
 import 'package:sylvakru/base/services/metadata_service.dart';
+import 'package:sylvakru/base/services/play_queue_logic.dart';
 import 'package:sylvakru/base/services/subsonic_client.dart';
 import 'package:sylvakru/base/services/super_lyric.dart';
 import 'package:sylvakru/base/services/webdav_client.dart';
@@ -27,7 +28,6 @@ import 'package:sylvakru/base/services/replay_gain.dart';
 import 'package:sylvakru/base/services/usb_audio_preferences.dart';
 import 'package:sylvakru/base/services/usb_audio_service.dart';
 import 'package:sylvakru/base/utils/metadata_utils.dart';
-import 'package:sylvakru/mini_view/mini_view.dart';
 import 'dart:async';
 
 import 'package:sylvakru/portrait_view/sleep_timer.dart';
@@ -780,46 +780,29 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
   }
 
   bool insert2Next(MyAudioMetadata song) {
-    int songIndex = playQueue.indexOf(song);
-    if (songIndex != -1) {
-      if (songIndex == currentIndex) {
-        return false;
-      }
-      if (songIndex < currentIndex) {
-        playQueue.removeAt(songIndex);
-        playQueue.insert(currentIndex, song);
-        currentIndex -= 1;
-      } else {
-        playQueue.removeAt(songIndex);
-        playQueue.insert(currentIndex + 1, song);
-      }
-    } else {
-      playQueue.insert(currentIndex + 1, song);
-      if (playModeNotifier.value == 1 ||
-          (playModeNotifier.value == 2 && audioHandler._tmpPlayMode == 1)) {
-        _playQueueTmp.add(song);
-      }
+    final result = PlayQueueLogic.insert2Next(playQueue, currentIndex, song);
+    if (result == null) {
+      return false;
+    }
+    currentIndex = result.currentIndex;
+    if (result.wasNewlyInserted &&
+        (playModeNotifier.value == 1 ||
+            (playModeNotifier.value == 2 && audioHandler._tmpPlayMode == 1))) {
+      _playQueueTmp.add(song);
     }
     return true;
   }
 
   bool add2Last(MyAudioMetadata song) {
-    int songIndex = playQueue.indexOf(song);
-    if (songIndex != -1) {
-      if (songIndex == currentIndex) {
-        return false;
-      }
-      if (songIndex < currentIndex) {
-        currentIndex -= 1;
-      }
-      playQueue.removeAt(songIndex);
-      playQueue.add(song);
-    } else {
-      playQueue.add(song);
-      if (playModeNotifier.value == 1 ||
-          (playModeNotifier.value == 2 && audioHandler._tmpPlayMode == 1)) {
-        _playQueueTmp.add(song);
-      }
+    final result = PlayQueueLogic.add2Last(playQueue, currentIndex, song);
+    if (result == null) {
+      return false;
+    }
+    currentIndex = result.currentIndex;
+    if (result.wasNewlyInserted &&
+        (playModeNotifier.value == 1 ||
+            (playModeNotifier.value == 2 && audioHandler._tmpPlayMode == 1))) {
+      _playQueueTmp.add(song);
     }
     return true;
   }
@@ -981,7 +964,7 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       colorManager.updateLyricsPageColors();
     }
 
-    if (miniModeNotifier.value) {
+    if (viewModeNotifier.value == .mini) {
       colorManager.updateMiniViewColors();
     }
   }

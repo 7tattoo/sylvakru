@@ -3,11 +3,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:sylvakru/base/app.dart';
 import 'package:sylvakru/base/audio_handler.dart';
 import 'package:sylvakru/base/services/interaction.dart';
 import 'package:sylvakru/base/services/keyboard.dart';
+import 'package:sylvakru/base/services/network_error_reporter.dart';
 import 'package:sylvakru/base/utils/dynamic_lyrics_page_route.dart';
 import 'package:sylvakru/base/utils/media_query.dart';
+import 'package:sylvakru/big_picture_view/big_picture_view.dart';
 import 'package:sylvakru/l10n/generated/app_localizations.dart';
 import 'package:sylvakru/landscape_view/landscape_view.dart';
 import 'package:sylvakru/landscape_view/sidebar.dart';
@@ -50,6 +53,18 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
         await NativeMenu.initIcons();
       });
     }
+
+    networkErrorNotifier.addListener(_onNetworkError);
+  }
+
+  // Server clients report failures here since they have no BuildContext of
+  // their own; this is the single place that turns that into something the
+  // user actually sees, instead of the failure only ever reaching the log.
+  void _onNetworkError() {
+    final message = lastNetworkErrorMessage;
+    if (message != null && mounted) {
+      showCenterMessage(context, message, duration: 3000);
+    }
   }
 
   @override
@@ -57,6 +72,7 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
     if (Platform.isAndroid) {
       WidgetsBinding.instance.removeObserver(this);
     }
+    networkErrorNotifier.removeListener(_onNetworkError);
     super.dispose();
   }
 
@@ -110,10 +126,13 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
 
   Widget view() {
     return ValueListenableBuilder(
-      valueListenable: miniModeNotifier,
-      builder: (context, miniMode, child) {
-        if (miniMode) {
+      valueListenable: viewModeNotifier,
+      builder: (context, viewMode, child) {
+        if (viewMode == .mini) {
           return MiniView();
+        }
+        if (viewMode == .bigPicture) {
+          return BigPictureView();
         }
         if (isTooNarrow(context)) {
           SystemChrome.setEnabledSystemUIMode(

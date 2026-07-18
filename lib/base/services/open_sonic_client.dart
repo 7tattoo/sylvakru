@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:sylvakru/base/services/logger.dart';
+import 'package:sylvakru/base/services/network_error_reporter.dart';
 
 abstract class OpenSubsonicClient {
   final String baseUrl;
@@ -119,9 +120,13 @@ abstract class OpenSubsonicClient {
         logger.output(e.response!.data.toString());
       }
 
+      reportNetworkError('$runtimeType', e.message ?? 'network error');
+
       return null;
     } catch (e) {
       logger.output('[$runtimeType] $e');
+
+      reportNetworkError('$runtimeType', e.toString());
 
       return null;
     }
