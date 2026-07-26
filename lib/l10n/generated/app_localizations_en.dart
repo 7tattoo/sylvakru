@@ -200,6 +200,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get grid => 'Grid';
 
   @override
+  String get collapseAll => 'Collapse all';
+
+  @override
+  String get expandAll => 'Expand all';
+
+  @override
   String get favorited => 'Favorited';
 
   @override

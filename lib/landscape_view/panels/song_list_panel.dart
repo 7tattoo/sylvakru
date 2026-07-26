@@ -167,10 +167,39 @@ extension _SongListPanel on _SongListState {
                     trailing: playlist == null
                         ? null
                         : SizedBox(
-                            width: 110,
+                            width: 160,
                             child: Row(
                               children: [
                                 Spacer(),
+                                ValueListenableBuilder(
+                                  valueListenable:
+                                      playlistManager.useAlbumStructureNotifier,
+                                  builder: (context, value, child) {
+                                    if (!albumStructureActive) {
+                                      return SizedBox.shrink();
+                                    }
+                                    // 一键全部收起/展开
+                                    return ValueListenableBuilder(
+                                      valueListenable: currentSongListNotifier,
+                                      builder: (context, value, child) {
+                                        final collapsed = allAlbumsCollapsed;
+                                        return IconButton(
+                                          tooltip: collapsed
+                                              ? l10n.expandAll
+                                              : l10n.collapseAll,
+                                          onPressed: () {
+                                            setAllAlbumsCollapsed(!collapsed);
+                                          },
+                                          icon: Icon(
+                                            collapsed
+                                                ? Icons.unfold_more
+                                                : Icons.unfold_less,
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
                                 MySwitch(
                                   trueText: l10n.albums,
                                   falseText: l10n.list,

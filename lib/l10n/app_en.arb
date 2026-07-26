@@ -107,6 +107,8 @@
   "view": "View",
   "list": "List",
   "grid": "Grid",
+  "collapseAll": "Collapse all",
+  "expandAll": "Expand all",
   "favorited": "Favorited",
   "favorites": "Favorites",
   "duration": "Duration",

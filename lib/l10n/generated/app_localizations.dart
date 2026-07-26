@@ -452,6 +452,18 @@ abstract class AppLocalizations {
   /// **'Grid'**
   String get grid;
 
+  /// No description provided for @collapseAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse all'**
+  String get collapseAll;
+
+  /// No description provided for @expandAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand all'**
+  String get expandAll;
+
   /// No description provided for @favorited.
   ///
   /// In en, this message translates to:

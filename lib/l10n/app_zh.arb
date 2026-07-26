@@ -58,6 +58,8 @@
   "view": "视图",
   "list": "列表",
   "grid": "网格",
+  "collapseAll": "全部收起",
+  "expandAll": "全部展开",
   "favorited": "喜欢",
   "favorites": "我喜欢的",
   "duration": "时长",

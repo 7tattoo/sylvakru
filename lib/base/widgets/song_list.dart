@@ -293,6 +293,22 @@ class _SongListState extends State<SongList> {
     updateSongList();
   }
 
+  // 是否已全部收起（显示行中不再有歌曲行）
+  bool get allAlbumsCollapsed =>
+      albumStructureRows.isNotEmpty &&
+      albumStructureRows.every((row) => row < 0);
+
+  // 一键全部收起/展开
+  void setAllAlbumsCollapsed(bool collapsed) {
+    collapsedAlbums.clear();
+    if (collapsed) {
+      for (final song in currentSongListNotifier.value) {
+        collapsedAlbums.add(getAlbum(song));
+      }
+    }
+    updateSongList();
+  }
+
   // 歌曲在专辑结构列表中的显示行；被收起时退回其专辑头所在行
   int albumStructureDisplayIndex(int index) {
     final display = albumStructureRows.indexOf(index);

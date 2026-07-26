@@ -200,6 +200,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get grid => '网格';
 
   @override
+  String get collapseAll => '全部收起';
+
+  @override
+  String get expandAll => '全部展开';
+
+  @override
   String get favorited => '喜欢';
 
   @override

@@ -151,6 +151,33 @@ extension _SongListPage on _SongListState {
                 ),
               ),
             ),
+          if (playlist != null)
+            ValueListenableBuilder(
+              valueListenable: playlistManager.useAlbumStructureNotifier,
+              builder: (context, value, child) {
+                if (!albumStructureActive) {
+                  return SizedBox.shrink();
+                }
+                final collapsed = allAlbumsCollapsed;
+                return ListTile(
+                  leading: Icon(
+                    collapsed ? Icons.unfold_more : Icons.unfold_less,
+                  ),
+                  title: Text(
+                    collapsed ? l10n.expandAll : l10n.collapseAll,
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  visualDensity: const VisualDensity(
+                    horizontal: 0,
+                    vertical: -4,
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    setAllAlbumsCollapsed(!collapsed);
+                  },
+                );
+              },
+            ),
           if (!isRanking && !isRecently)
             ValueListenableBuilder(
               valueListenable: playlistManager.useAlbumStructureNotifier,
