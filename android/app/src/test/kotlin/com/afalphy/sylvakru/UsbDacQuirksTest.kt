@@ -5,7 +5,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// 只测纯解析与匹配逻辑（parseEntries/matchQuirk），asset/override 的文件装载依赖 Android 运行时
+// 只测纯 JSON 解析逻辑（parseEntries），断言按 key 直接取条目；
+// 键匹配（精确→厂商通配）已下沉 native，对拍测试在 cpp/tests/usb_dac_quirks_test.cpp，
+// asset/override 的文件装载依赖 Android 运行时
 class UsbDacQuirksTest {
     private val sample = """
         {
@@ -42,27 +44,6 @@ class UsbDacQuirksTest {
         assertEquals(200, quirk.clockPreRollMs)
         assertEquals(listOf("keep-alt-on-pause"), quirk.flags)
         assertEquals("0x262a:*", entries[1].first)
-    }
-
-    @Test
-    fun exactMatchBeatsVendorWildcard() {
-        val entries = UsbDacQuirks.parseEntries(sample)
-        val exact = UsbDacQuirks.matchQuirk(entries, 0x20b1, 0x0002)
-        assertEquals("XMOS XU208", exact?.label)
-        // 厂商通配：同 vid 不同 pid
-        val vendor = UsbDacQuirks.matchQuirk(entries, 0x262a, 0x9999)
-        assertEquals(false, vendor?.dopSupported)
-        // 未命中
-        assertNull(UsbDacQuirks.matchQuirk(entries, 0x1234, 0x5678))
-    }
-
-    @Test
-    fun overrideEntryWinsWhenListedFirst() {
-        val override = UsbDacQuirks.parseEntries(
-            """{"version":1,"devices":[{"match":{"vid":"0x20b1","pid":"0x0002"},"dop":{"supported":false}}]}""",
-        )
-        val merged = override + UsbDacQuirks.parseEntries(sample)
-        assertEquals(false, UsbDacQuirks.matchQuirk(merged, 0x20b1, 0x0002)?.dopSupported)
     }
 
     @Test
@@ -130,23 +111,23 @@ class UsbDacQuirksTest {
             """.trimIndent(),
         )
 
-        val exact = UsbDacQuirks.matchQuirk(entries, 0x20b1, 0x0002)
-        assertEquals("XU208 DAC", exact?.label)
-        assertEquals(7, exact?.hardwareVolumeFeatureUnitId)
-        assertEquals(0, exact?.hardwareVolumeControlInterface)
-        assertEquals(listOf(0, 1, 2), exact?.hardwareVolumeChannels)
-        assertEquals("uac2", exact?.hardwareVolumeProtocol)
-        assertEquals("device", exact?.hardwareVolumeRecipient)
-        assertEquals(-63 * 256, exact?.hardwareVolumeMinQ8_8)
-        assertEquals(0, exact?.hardwareVolumeMaxQ8_8)
-        assertEquals(256, exact?.hardwareVolumeStepQ8_8)
-        assertEquals(-112 * 256, exact?.hardwareVolumeMuteQ8_8)
-        assertEquals(false, exact?.hardwareVolumeEnabled)
-        assertEquals(false, exact?.hardwareVolumeDsdSupported)
+        val exact = entries.single { it.first == "0x20b1:0x0002" }.second
+        assertEquals("XU208 DAC", exact.label)
+        assertEquals(7, exact.hardwareVolumeFeatureUnitId)
+        assertEquals(0, exact.hardwareVolumeControlInterface)
+        assertEquals(listOf(0, 1, 2), exact.hardwareVolumeChannels)
+        assertEquals("uac2", exact.hardwareVolumeProtocol)
+        assertEquals("device", exact.hardwareVolumeRecipient)
+        assertEquals(-63 * 256, exact.hardwareVolumeMinQ8_8)
+        assertEquals(0, exact.hardwareVolumeMaxQ8_8)
+        assertEquals(256, exact.hardwareVolumeStepQ8_8)
+        assertEquals(-112 * 256, exact.hardwareVolumeMuteQ8_8)
+        assertEquals(false, exact.hardwareVolumeEnabled)
+        assertEquals(false, exact.hardwareVolumeDsdSupported)
 
-        val vendor = UsbDacQuirks.matchQuirk(entries, 0x20b1, 0x9999)
-        assertEquals("XMOS", vendor?.label)
-        assertEquals(40, vendor?.clockSetCurDelayMs)
+        val vendor = entries.single { it.first == "0x20b1:*" }.second
+        assertEquals("XMOS", vendor.label)
+        assertEquals(40, vendor.clockSetCurDelayMs)
     }
 
     @Test
@@ -163,7 +144,7 @@ class UsbDacQuirksTest {
     }
 
     @Test
-    fun enablesIbassoHidOnlyForExplicitDeviceEntries() {
+    fun ibassoHidProtocolOnlyOnExplicitDeviceEntries() {
         val entries = UsbDacQuirks.parseEntries(
             """
                 {
@@ -192,13 +173,12 @@ class UsbDacQuirksTest {
 
         assertEquals(
             "ibassoHid",
-            UsbDacQuirks.matchQuirk(entries, 0x262a, 0x1001)?.hardwareVolumeProtocol,
+            entries.single { it.first == "0x262a:0x1001" }.second.hardwareVolumeProtocol,
         )
         assertEquals(
             "ibassoHid",
-            UsbDacQuirks.matchQuirk(entries, 0x262a, 0x1002)?.hardwareVolumeProtocol,
+            entries.single { it.first == "0x262a:0x1002" }.second.hardwareVolumeProtocol,
         )
-        assertNull(UsbDacQuirks.matchQuirk(entries, 0x262a, 0x9999)?.hardwareVolumeProtocol)
-        assertNull(UsbDacQuirks.matchQuirk(entries, 0x1234, 0x9999))
+        assertNull(entries.single { it.first == "0x262a:*" }.second.hardwareVolumeProtocol)
     }
 }

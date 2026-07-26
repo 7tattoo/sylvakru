@@ -41,6 +41,23 @@ data class DacQuirk(
 )
 
 /**
+ * usb_dac_quirks.cpp 的 JNI 入口：键匹配与位完美混音采样率选择。
+ * quirk 表不过界——传键列表、返回命中下标；对拍测试见 cpp/tests/usb_dac_quirks_test.cpp。
+ */
+internal object UsbDacQuirksNative {
+    init {
+        System.loadLibrary("sylvakru_usb_exclusive")
+    }
+
+    external fun matchQuirkIndex(keys: Array<String>, vendorId: Int, productId: Int): Int
+
+    external fun chooseBitPerfectMixerSampleRate(
+        requestedSampleRate: Int,
+        supportedSampleRates: IntArray,
+    ): Int
+}
+
+/**
  * quirk 配置加载与匹配：内置 asset + 本地 override 合并（override 优先），
  * 按 `vid:pid` 精确匹配 → `vid:*` 厂商匹配 → 内置默认值三级查找。
  *
@@ -67,11 +84,13 @@ object UsbDacQuirks {
     /** 诊断报告用：命中条目的描述（"vid:pid label" / "vid:* label" / null=默认值）。 */
     fun matchDescription(context: Context, vendorId: Int, productId: Int): String? {
         ensureLoaded(context)
-        val exactKey = matchKey(vendorId, productId)
-        val vendorKey = matchKey(vendorId, null)
-        val hit = entries.firstOrNull { it.first == exactKey }
-            ?: entries.firstOrNull { it.first == vendorKey }
-            ?: return null
+        val snapshot = entries
+        val index = UsbDacQuirksNative.matchQuirkIndex(
+            Array(snapshot.size) { snapshot[it].first },
+            vendorId,
+            productId,
+        )
+        val hit = snapshot.getOrNull(index) ?: return null
         return "${hit.first}${hit.second.label?.let { " ($it)" } ?: ""}"
     }
 
@@ -308,14 +327,14 @@ object UsbDacQuirks {
         vendorId: Int,
         productId: Int,
     ): DacQuirk? {
-        val exactKey = matchKey(vendorId, productId)
-        val vendorKey = matchKey(vendorId, null)
-        return entries.firstOrNull { it.first == exactKey }?.second
-            ?: entries.firstOrNull { it.first == vendorKey }?.second
+        // 匹配下沉 usb_dac_quirks.cpp：传键列表，native 返回命中下标（-1 未命中）
+        val index = UsbDacQuirksNative.matchQuirkIndex(
+            Array(entries.size) { entries[it].first },
+            vendorId,
+            productId,
+        )
+        return entries.getOrNull(index)?.second
     }
-
-    private fun matchKey(vendorId: Int, productId: Int?): String =
-        "${hex(vendorId)}:${productId?.let { hex(it) } ?: "*"}"
 
     private fun hex(value: Int): String = "0x%04x".format(value)
 
