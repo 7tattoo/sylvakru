@@ -310,6 +310,13 @@ void closeLocked() {
         g_pending_urbs.size());
     discardPendingLocked();
     if (g_interface_number >= 0) {
+        // UAC 标准停流信号：先回 alt 0 再释放接口。少了这步 Macaron 从
+        // native DSD 退出时固件停在 DSD 状态，后续 PCM 会话声道错乱（单声道）
+        // 且反馈端点一直报上一个会话的速率，只能拔插恢复。
+        usbdevfs_setinterface set_interface = {};
+        set_interface.interface = static_cast<unsigned int>(g_interface_number);
+        set_interface.altsetting = 0;
+        ioctl(g_fd, USBDEVFS_SETINTERFACE, &set_interface);
         ioctl(g_fd, USBDEVFS_RELEASEINTERFACE, &g_interface_number);
     }
     close(g_fd);
