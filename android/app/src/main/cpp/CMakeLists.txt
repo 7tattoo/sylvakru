@@ -85,6 +85,16 @@ add_library(
 )
 target_include_directories(sylvakru_usb_dac_quirks PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+# iBasso HID 音量协议纯逻辑（增益换算/音量表/HID 报文/验证决策）：
+# 从 UsbVolumeProtocol.kt 下沉；会话策略胶水仍在 Kotlin。音量安全红线：
+# 任何数值行为改动必须先过 usb_volume_protocol_test 对拍
+add_library(
+    sylvakru_usb_volume_protocol
+    STATIC
+    usb_volume_protocol.cpp
+)
+target_include_directories(sylvakru_usb_volume_protocol PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 if(ANDROID)
     add_library(
         sylvakru_usb_exclusive
@@ -95,6 +105,7 @@ if(ANDROID)
         usb_dsd_jni.cpp
         usb_uac_jni.cpp
         usb_dac_quirks_jni.cpp
+        usb_volume_protocol_jni.cpp
     )
 
     find_library(log-lib log)
@@ -106,6 +117,7 @@ if(ANDROID)
         sylvakru_usb_dsd
         sylvakru_usb_uac
         sylvakru_usb_dac_quirks
+        sylvakru_usb_volume_protocol
         ${log-lib}
     )
 endif()
@@ -128,6 +140,10 @@ if(SYLVAKRU_BUILD_HOST_TESTS)
     # WavPack 测试不需要 fixture：用 libwavpack 编码 API 现场生成再往返验证
     add_executable(wavpack_decoder_test tests/wavpack_decoder_test.cpp)
     target_link_libraries(wavpack_decoder_test PRIVATE sylvakru_wavpack_decoder)
+
+    # 音量协议测试：对拍 Kotlin 侧全部涉及下沉符号的用例（音量安全红线）
+    add_executable(usb_volume_protocol_test tests/usb_volume_protocol_test.cpp)
+    target_link_libraries(usb_volume_protocol_test PRIVATE sylvakru_usb_volume_protocol)
 
     # DSD 测试不需要 fixture：运行时手工构造最小 DSF/DFF 文件与 Kotlin 版对拍
     add_executable(usb_dsd_test tests/usb_dsd_test.cpp)
