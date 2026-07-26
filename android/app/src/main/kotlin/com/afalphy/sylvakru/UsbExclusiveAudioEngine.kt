@@ -1973,6 +1973,20 @@ class UsbExclusiveAudioEngine(
                     ),
                 )
             }
+            // Macaron HID 在连续写入下会失聪数秒后自愈：冻结期间按键先复活
+            // 读线程再做恢复读，否则 reader 标记不可用后恢复读必然快速失败，
+            // 冻结只能靠跨参数切歌解除。仍失聪时现有单次重启预算继续兜底。
+            if (!ibassoReaderRunning.get()) {
+                UsbDiagnostics.i(
+                    tag,
+                    "Reviving the iBasso HID reader for a frozen-volume recovery read.",
+                )
+                startIbassoVolumeReader(
+                    controlConnection,
+                    inputEndpoint,
+                    IbassoHidVolumeProtocol.capabilities.unsolicitedEvents,
+                )
+            }
             val recoveredRaw = readIbassoCurrentBaseRaw(controlConnection)
             if (previousAppliedTarget == null || recoveredRaw != previousAppliedTarget.baseRaw) {
                 if (isDsd) {
