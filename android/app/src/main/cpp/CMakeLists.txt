@@ -84,6 +84,7 @@ if(ANDROID)
         flac_decoder_jni.cpp
         wavpack_decoder_jni.cpp
         usb_dsd_jni.cpp
+        usb_uac_jni.cpp
     )
 
     find_library(log-lib log)
@@ -93,6 +94,7 @@ if(ANDROID)
         sylvakru_flac_decoder
         sylvakru_wavpack_decoder
         sylvakru_usb_dsd
+        sylvakru_usb_uac
         ${log-lib}
     )
 endif()

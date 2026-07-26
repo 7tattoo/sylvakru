@@ -5047,81 +5047,18 @@ class UsbExclusiveAudioEngine(
         if (descriptors == null) {
             return emptyList()
         }
+        // 解析下沉 usb_uac.cpp：native 返回每条 6 槽位的扁平数组（布局见 usb_uac_jni.cpp）
+        val flat = UsbUacNative.parseVolumeFeatures(descriptors)
         val features = mutableListOf<HardwareVolumeFeature>()
-        var offset = 0
-        var interfaceNumber = -1
-        var interfaceClass = -1
-        var interfaceSubclass = -1
-        var interfaceProtocol = -1
-        while (offset + 1 < descriptors.size) {
-            val length = descriptors[offset].toInt() and 0xff
-            val descriptorType = descriptors[offset + 1].toInt() and 0xff
-            if (length < 2 || offset + length > descriptors.size) {
-                break
-            }
-            if (descriptorType == 0x04 && length >= 9) {
-                interfaceNumber = descriptors[offset + 2].toInt() and 0xff
-                interfaceClass = descriptors[offset + 5].toInt() and 0xff
-                interfaceSubclass = descriptors[offset + 6].toInt() and 0xff
-                interfaceProtocol = descriptors[offset + 7].toInt() and 0xff
-            } else if (
-                descriptorType == 0x24 &&
-                interfaceClass == UsbConstants.USB_CLASS_AUDIO &&
-                interfaceSubclass == 1 &&
-                length >= 7 &&
-                (descriptors[offset + 2].toInt() and 0xff) == 0x06
-            ) {
-                if (interfaceProtocol == 0x20) {
-                    val controlCount = (length - 6) / 4
-                    for (channel in 0 until controlCount) {
-                        val controlOffset = offset + 5 + channel * 4
-                        val controls = (descriptors[controlOffset].toInt() and 0xff) or
-                            ((descriptors[controlOffset + 1].toInt() and 0xff) shl 8) or
-                            ((descriptors[controlOffset + 2].toInt() and 0xff) shl 16) or
-                            ((descriptors[controlOffset + 3].toInt() and 0xff) shl 24)
-                        val volumeControl = (controls ushr 2) and 0x03
-                        val writable = when (volumeControl) {
-                            0x01 -> false
-                            0x03 -> true
-                            else -> null
-                        } ?: continue
-                        features += HardwareVolumeFeature(
-                            protocol = "uac2",
-                            controlInterface = interfaceNumber,
-                            unitId = descriptors[offset + 3].toInt() and 0xff,
-                            sourceId = descriptors[offset + 4].toInt() and 0xff,
-                            channel = channel,
-                            writable = writable,
-                        )
-                    }
-                } else {
-                    val controlSize = descriptors[offset + 5].toInt() and 0xff
-                    if (controlSize in 1..4) {
-                        val controlCount = (length - 7) / controlSize
-                        for (channel in 0 until controlCount) {
-                            var controls = 0
-                            for (byteIndex in 0 until controlSize) {
-                                controls = controls or (
-                                    (descriptors[offset + 6 + channel * controlSize + byteIndex].toInt() and 0xff) shl
-                                        (byteIndex * 8)
-                                    )
-                            }
-                            if (controls and 0x02 == 0) {
-                                continue
-                            }
-                            features += HardwareVolumeFeature(
-                                protocol = "uac1",
-                                controlInterface = interfaceNumber,
-                                unitId = descriptors[offset + 3].toInt() and 0xff,
-                                sourceId = descriptors[offset + 4].toInt() and 0xff,
-                                channel = channel,
-                                writable = true,
-                            )
-                        }
-                    }
-                }
-            }
-            offset += length
+        for (base in flat.indices step 6) {
+            features += HardwareVolumeFeature(
+                protocol = if (flat[base] != 0) "uac2" else "uac1",
+                controlInterface = flat[base + 1],
+                unitId = flat[base + 2],
+                sourceId = flat[base + 3],
+                channel = flat[base + 4],
+                writable = flat[base + 5] != 0,
+            )
         }
         return features
     }
@@ -5130,31 +5067,8 @@ class UsbExclusiveAudioEngine(
         if (descriptors == null) {
             return emptySet()
         }
-        val sources = mutableSetOf<Int>()
-        var offset = 0
-        var interfaceClass = -1
-        var interfaceSubclass = -1
-        while (offset + 1 < descriptors.size) {
-            val length = descriptors[offset].toInt() and 0xff
-            val descriptorType = descriptors[offset + 1].toInt() and 0xff
-            if (length < 2 || offset + length > descriptors.size) {
-                break
-            }
-            if (descriptorType == 0x04 && length >= 9) {
-                interfaceClass = descriptors[offset + 5].toInt() and 0xff
-                interfaceSubclass = descriptors[offset + 6].toInt() and 0xff
-            } else if (
-                descriptorType == 0x24 &&
-                interfaceClass == UsbConstants.USB_CLASS_AUDIO &&
-                interfaceSubclass == 1 &&
-                length >= 8 &&
-                (descriptors[offset + 2].toInt() and 0xff) == 0x03
-            ) {
-                sources += descriptors[offset + 7].toInt() and 0xff
-            }
-            offset += length
-        }
-        return sources
+        // 解析下沉 usb_uac.cpp：native 直接返回去重后的 bSourceID 列表
+        return UsbUacNative.parseOutputTerminalSources(descriptors).toSet()
     }
 
     private fun readHardwareVolumeRangeValue(
@@ -5513,97 +5427,23 @@ class UsbExclusiveAudioEngine(
             return emptyMap()
         }
 
+        // 解析下沉 usb_uac.cpp：native 返回每条 10 槽位的扁平数组，-1 表示字段
+        // 缺失（布局见 usb_uac_jni.cpp）；protocol 沿用原实现偏移，仅日志用途
+        val flat = UsbUacNative.parseStreamingFormats(descriptors)
         val formats = mutableMapOf<Pair<Int, Int>, StreamingFormatInfo>()
-        var offset = 0
-        var currentInterfaceNumber = -1
-        var currentAlternateSetting = -1
-        var currentInterfaceSubclass = -1
-        var currentInterfaceProtocol = -1
-
-        while (offset + 1 < descriptors.size) {
-            val length = descriptors[offset].toInt() and 0xff
-            val descriptorType = descriptors[offset + 1].toInt() and 0xff
-            if (length < 2 || offset + length > descriptors.size) {
-                break
-            }
-
-            if (descriptorType == 0x04 && length >= 9) {
-                currentInterfaceNumber = descriptors[offset + 2].toInt() and 0xff
-                currentAlternateSetting = descriptors[offset + 3].toInt() and 0xff
-                currentInterfaceSubclass = descriptors[offset + 6].toInt() and 0xff
-                currentInterfaceProtocol = descriptors[offset + 8].toInt() and 0xff
-            } else if (
-                descriptorType == 0x24 &&
-                currentInterfaceSubclass == 2 &&
-                length >= 3
-            ) {
-                val key = currentInterfaceNumber to currentAlternateSetting
-                val subtype = descriptors[offset + 2].toInt() and 0xff
-                val existing = formats[key] ?: StreamingFormatInfo(
-                    interfaceNumber = currentInterfaceNumber,
-                    alternateSetting = currentAlternateSetting,
-                    protocol = currentInterfaceProtocol,
-                )
-                when (subtype) {
-                    0x01 -> {
-                        val terminalLink = if (length >= 4) {
-                            descriptors[offset + 3].toInt() and 0xff
-                        } else {
-                            existing.terminalLink
-                        }
-                        val formatType = if (length >= 6) {
-                            descriptors[offset + 5].toInt() and 0xff
-                        } else {
-                            existing.formatType
-                        }
-                        // UAC2 AS_GENERAL（16 字节）的 bmFormats：D31=RAW_DATA 即 native DSD alt；
-                        // UAC1 该描述符只有 7 字节，天然不会进这个分支
-                        val bmFormats = if (length >= 10) {
-                            (descriptors[offset + 6].toInt() and 0xff) or
-                                ((descriptors[offset + 7].toInt() and 0xff) shl 8) or
-                                ((descriptors[offset + 8].toInt() and 0xff) shl 16) or
-                                ((descriptors[offset + 9].toInt() and 0xff) shl 24)
-                        } else {
-                            existing.bmFormats
-                        }
-                        val channels = if (length >= 11) {
-                            descriptors[offset + 10].toInt() and 0xff
-                        } else {
-                            existing.channels
-                        }
-                        formats[key] = existing.copy(
-                            terminalLink = terminalLink,
-                            formatType = formatType,
-                            bmFormats = bmFormats,
-                            channels = channels,
-                        )
-                    }
-                    0x02 -> {
-                        // UAC1 Type-I 格式描述符比 UAC2 多一个 bNrChannels 字段、且带采样率表，
-                        // 描述符更长（length>=7）；UAC2 Type-I 固定 length=6。原实现两个分支判据
-                        // 顺序写反（先判 length>=6），导致 UAC1 描述符错误命中 UAC2 布局，把
-                        // bSubframeSize(2/3/4) 当成位深，16-bit 被当 2/3/4-bit 严重右移打成静音。
-                        if (length >= 7) {
-                            // UAC1: bFormatType, bNrChannels, bSubframeSize, bBitResolution, …
-                            formats[key] = existing.copy(
-                                formatType = descriptors[offset + 3].toInt() and 0xff,
-                                channels = descriptors[offset + 4].toInt() and 0xff,
-                                subslotSize = descriptors[offset + 5].toInt() and 0xff,
-                                bitResolution = descriptors[offset + 6].toInt() and 0xff,
-                            )
-                        } else if (length >= 6) {
-                            // UAC2: bFormatType, bSubslotSize, bBitResolution
-                            formats[key] = existing.copy(
-                                formatType = descriptors[offset + 3].toInt() and 0xff,
-                                subslotSize = descriptors[offset + 4].toInt() and 0xff,
-                                bitResolution = descriptors[offset + 5].toInt() and 0xff,
-                            )
-                        }
-                    }
-                }
-            }
-
-            offset += length
+        for (base in flat.indices step 10) {
+            val info = StreamingFormatInfo(
+                interfaceNumber = flat[base],
+                alternateSetting = flat[base + 1],
+                protocol = flat[base + 2],
+                terminalLink = flat[base + 3].takeIf { it >= 0 },
+                formatType = flat[base + 4].takeIf { it >= 0 },
+                channels = flat[base + 5].takeIf { it >= 0 },
+                subslotSize = flat[base + 6].takeIf { it >= 0 },
+                bitResolution = flat[base + 7].takeIf { it >= 0 },
+                bmFormats = if (flat[base + 9] != 0) flat[base + 8] else null,
+            )
+            formats[info.interfaceNumber to info.alternateSetting] = info
         }
 
         UsbDiagnostics.i(
@@ -5624,71 +5464,17 @@ class UsbExclusiveAudioEngine(
             return null
         }
 
-        var offset = 0
-        var currentInterfaceNumber = -1
-        var currentAlternateSetting = -1
-        var currentInterfaceSubclass = -1
-        var terminalLink: Int? = null
-        var firstClockSourceId: Int? = null
-        var hasClockSource = false
-        val inputTerminalClockIds = mutableMapOf<Int, Int>()
-        val outputTerminalClockIds = mutableMapOf<Int, Int>()
-
-        while (offset + 1 < descriptors.size) {
-            val length = descriptors[offset].toInt() and 0xff
-            val descriptorType = descriptors[offset + 1].toInt() and 0xff
-            if (length < 2 || offset + length > descriptors.size) {
-                break
-            }
-
-            if (descriptorType == 0x04 && length >= 9) {
-                currentInterfaceNumber = descriptors[offset + 2].toInt() and 0xff
-                currentAlternateSetting = descriptors[offset + 3].toInt() and 0xff
-                currentInterfaceSubclass = descriptors[offset + 6].toInt() and 0xff
-            } else if (descriptorType == 0x24 && length >= 3) {
-                val subtype = descriptors[offset + 2].toInt() and 0xff
-                when (subtype) {
-                    0x0a -> {
-                        hasClockSource = true
-                        if (length >= 4 && firstClockSourceId == null) {
-                            firstClockSourceId = descriptors[offset + 3].toInt() and 0xff
-                        }
-                    }
-                    0x02 -> {
-                        if (length >= 8) {
-                            val terminalId = descriptors[offset + 3].toInt() and 0xff
-                            inputTerminalClockIds[terminalId] =
-                                descriptors[offset + 7].toInt() and 0xff
-                        }
-                    }
-                    0x03 -> {
-                        if (length >= 9) {
-                            val terminalId = descriptors[offset + 3].toInt() and 0xff
-                            outputTerminalClockIds[terminalId] =
-                                descriptors[offset + 8].toInt() and 0xff
-                        }
-                    }
-                    0x01 -> {
-                        if (
-                            currentInterfaceNumber == streamingInterfaceNumber &&
-                            currentAlternateSetting == streamingAlternateSetting &&
-                            currentInterfaceSubclass == 2 &&
-                            length >= 4
-                        ) {
-                            terminalLink = descriptors[offset + 3].toInt() and 0xff
-                        }
-                    }
-                }
-            }
-
-            offset += length
-        }
+        // 解析下沉 usb_uac.cpp：native 返回 [hasClockSource, terminalLink, clockSourceId]，
+        // -1 表示 null（布局见 usb_uac_jni.cpp）
+        val parsed = UsbUacNative.findClockSource(
+            descriptors,
+            streamingInterfaceNumber,
+            streamingAlternateSetting,
+        )
 
         // UAC1 设备没有 clock source 实体（描述符里不会出现 CLOCK_SOURCE，子类型 0x0a），
         // 采样率必须通过端点 SET_CUR 设置（见 configureUsbAudioClock 的 UAC1 分支）。
-        // 下面的 terminal→clock 映射按 UAC2 布局解析，对 UAC1 会误读
-        // （把 INPUT_TERMINAL 的 bNrChannels 当成 clockSourceId），因此无 clock source 时直接返回 null。
-        if (!hasClockSource) {
+        if (parsed[0] == 0) {
             UsbDiagnostics.i(
                 tag,
                 "no UAC2 clock source entity (UAC1 device); using endpoint SET_CUR.",
@@ -5696,10 +5482,8 @@ class UsbExclusiveAudioEngine(
             return null
         }
 
-        val linkedTerminal = terminalLink
-        val result = linkedTerminal?.let {
-            inputTerminalClockIds[it] ?: outputTerminalClockIds[it]
-        } ?: firstClockSourceId
+        val terminalLink = parsed[1].takeIf { it >= 0 }
+        val result = parsed[2].takeIf { it >= 0 }
         UsbDiagnostics.i(
             tag,
             "parsed UAC2 clock source: streamingInterface=$streamingInterfaceNumber, " +
