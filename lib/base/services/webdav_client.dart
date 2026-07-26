@@ -278,7 +278,8 @@ class WebDavClient {
         onReceiveProgress: onReceiveProgress,
         cancelToken: cancelToken,
         deleteOnError: false,
-        options: Options(receiveTimeout: Duration.zero),
+        // 分片间隔超时：失速及时报错交给上层重试，不限制整首下载总时长
+        options: Options(receiveTimeout: const Duration(seconds: 15)),
       ),
     );
   }

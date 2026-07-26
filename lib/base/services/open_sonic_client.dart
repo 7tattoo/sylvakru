@@ -363,7 +363,9 @@ abstract class OpenSubsonicClient {
         onReceiveProgress: onProgress,
         cancelToken: cancelToken,
         deleteOnError: false,
-        options: Options(receiveTimeout: Duration.zero),
+        // 下载流的 receiveTimeout 是分片间隔超时：网络静默失速时及时报错，
+        // 让上层缓存重试循环续传，而不是永远挂住（不限制整首下载总时长）
+        options: Options(receiveTimeout: const Duration(seconds: 15)),
       );
       return true;
     } on DioException catch (e) {
