@@ -229,4 +229,11 @@ class UsbStreamTransitionTest {
             preservedVolumeVerificationAction(true, false, null, 20),
         )
     }
+
+    @Test
+    fun keepsUsbOutputQueuedWhenPlaybackStops() {
+        assertEquals(false, shouldFlushOutputOnStop(null))
+        assertEquals(false, shouldFlushOutputOnStop("dop"))
+        assertEquals(false, shouldFlushOutputOnStop("native"))
+    }
 }

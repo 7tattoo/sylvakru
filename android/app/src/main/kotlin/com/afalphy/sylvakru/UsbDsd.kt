@@ -3,15 +3,60 @@ package com.afalphy.sylvakru
 import java.io.Closeable
 import java.io.File
 import java.io.IOException
-import java.io.RandomAccessFile
 
 // DSD 静音字节是 0x69（01101001，均值为半幅的交替位型），不是 0x00。
 // 暂停/垫包必须发 0x69，发零会让 DAC 掉出 DSD 模式并可能爆音。
 const val DSD_SILENCE_BYTE = 0x69
 
 /**
+ * usb_dsd.cpp 的 JNI 入口；句柄由各包装类独占持有。
+ * 核心逻辑（容器解析/位序/DoP 打包/Native 重排）已下沉平台无关 C++，
+ * 对拍测试见 cpp/tests/usb_dsd_test.cpp。
+ */
+internal object UsbDsdNative {
+    init {
+        System.loadLibrary("sylvakru_usb_exclusive")
+    }
+
+    external fun readerCreate(): Long
+
+    external fun readerOpen(handle: Long, path: String, streaming: Boolean): String?
+
+    external fun readerInfo(handle: Long): LongArray
+
+    external fun readerFormatName(handle: Long): String
+
+    external fun readerRead(handle: Long, out: ByteArray): Int
+
+    external fun readerCanReadAt(handle: Long, fileLength: Long): Boolean
+
+    external fun readerSeekTo(handle: Long, positionMs: Long): Long
+
+    external fun readerPositionMs(handle: Long): Long
+
+    external fun readerDestroy(handle: Long)
+
+    external fun dopCreate(channels: Int): Long
+
+    external fun nativeDsdCreate(channels: Int, bytesPerSample: Int, bigEndian: Boolean): Long
+
+    external fun encoderEncode(handle: Long, data: ByteArray, length: Int): ByteArray
+
+    external fun encoderEncodeSilence(handle: Long, frames: Int): ByteArray
+
+    external fun encoderDrain(handle: Long): ByteArray
+
+    external fun dopReset(handle: Long)
+
+    external fun encoderDestroy(handle: Long)
+
+    external fun nativeDsdBytesPerSample(format: String): Int
+}
+
+/**
  * 统一读取 DSF/DFF 文件，屏蔽两种容器差异，输出统一约定的 DSD 字节流：
- * MSB-first、逐字节声道交错（L R L R…）。纯 JVM 实现，不依赖 Android API，可直接单元测试。
+ * MSB-first、逐字节声道交错（L R L R…）。解析与交错实现在 usb_dsd.cpp，
+ * 本类只是 JNI 薄包装，仅供 USB 独占解码线程单线程使用。
  *
  * - DSF（Sony，小端）：采样按每通道 blockSizePerChannel 字节的块 planar 存放，读取时转交错；
  *   bitsPerSample=1 表示每字节 LSB-first，需查表位反转；=8 表示 MSB-first，直接透传。
@@ -19,27 +64,18 @@ const val DSD_SILENCE_BYTE = 0x69
  *   DST 压缩的 DFF 不支持，open 时抛错。
  */
 class DsdFileReader private constructor(
-    private val input: RandomAccessFile,
+    private var handle: Long,
     val formatName: String,
     val sampleRate: Int,
     val channels: Int,
-    private val dataStart: Long,
-    private val bytesPerChannel: Long,
-    private val blockSizePerChannel: Int,
-    private val lsbFirst: Boolean,
+    val durationMs: Long,
 ) : Closeable {
-    // 每通道已交付给调用方的字节数，即当前播放位置
-    private var positionBytesPerChannel = 0L
-
-    // DSF 专用：一个块组（blockSizePerChannel × channels）转交错后的缓冲
-    private val chunk = if (blockSizePerChannel > 0) ByteArray(blockSizePerChannel * channels) else ByteArray(0)
-    private var chunkLength = 0
-    private var chunkOffset = 0
-    // DSF 专用：已从文件装载进 chunk 的每通道字节数
-    private var loadedBytesPerChannel = 0L
-
-    val durationMs: Long get() = bytesPerChannel * 8_000L / sampleRate
-    val positionMs: Long get() = positionBytesPerChannel * 8_000L / sampleRate
+    /** 当前播放位置（已交付字节换算），毫秒。 */
+    val positionMs: Long
+        get() {
+            check(handle != 0L) { "DsdFileReader 已关闭" }
+            return UsbDsdNative.readerPositionMs(handle)
+        }
 
     /** DSD 倍率（64/128/256/512），速率不在 44.1k 族时为 null。 */
     val dsdMultiple: Int? get() = if (sampleRate % 44100 == 0) sampleRate / 44100 else null
@@ -52,82 +88,8 @@ class DsdFileReader private constructor(
      * 一次调用最多交付一个内部块的余量，调用方循环读取即可。
      */
     fun read(out: ByteArray): Int {
-        if (blockSizePerChannel > 0) {
-            return readDsf(out)
-        }
-        val remaining = (bytesPerChannel - positionBytesPerChannel) * channels
-        if (remaining <= 0L) {
-            return -1
-        }
-        val wanted = (out.size / channels * channels).toLong().coerceAtMost(remaining).toInt()
-        if (wanted <= 0) {
-            return -1
-        }
-        var readTotal = 0
-        while (readTotal < wanted) {
-            val count = input.read(out, readTotal, wanted - readTotal)
-            if (count < 0) {
-                break
-            }
-            readTotal += count
-        }
-        // 文件比头部声明的短：把不完整的尾部对齐丢弃
-        val delivered = readTotal / channels * channels
-        if (delivered <= 0) {
-            positionBytesPerChannel = bytesPerChannel
-            return -1
-        }
-        positionBytesPerChannel += delivered / channels
-        return delivered
-    }
-
-    private fun readDsf(out: ByteArray): Int {
-        if (chunkOffset >= chunkLength && !loadNextDsfBlock()) {
-            return -1
-        }
-        val count = minOf(out.size / channels * channels, chunkLength - chunkOffset)
-        if (count <= 0) {
-            return -1
-        }
-        System.arraycopy(chunk, chunkOffset, out, 0, count)
-        chunkOffset += count
-        positionBytesPerChannel += count / channels
-        return count
-    }
-
-    private fun loadNextDsfBlock(): Boolean {
-        val valid = (bytesPerChannel - loadedBytesPerChannel).coerceAtMost(blockSizePerChannel.toLong()).toInt()
-        if (valid <= 0) {
-            return false
-        }
-        val groupIndex = loadedBytesPerChannel / blockSizePerChannel
-        val groupBytes = blockSizePerChannel.toLong() * channels
-        input.seek(dataStart + groupIndex * groupBytes)
-        val raw = ByteArray(blockSizePerChannel * channels)
-        var readTotal = 0
-        while (readTotal < raw.size) {
-            val count = input.read(raw, readTotal, raw.size - readTotal)
-            if (count < 0) {
-                break
-            }
-            readTotal += count
-        }
-        // planar 块转逐字节交错；LSB-first 时同步做位反转
-        val usable = minOf(valid, readTotal / channels)
-        if (usable <= 0) {
-            loadedBytesPerChannel = bytesPerChannel
-            return false
-        }
-        for (index in 0 until usable) {
-            for (channel in 0 until channels) {
-                val byte = raw[channel * blockSizePerChannel + index]
-                chunk[index * channels + channel] = if (lsbFirst) BIT_REVERSE_TABLE[byte.toInt() and 0xff] else byte
-            }
-        }
-        chunkLength = usable * channels
-        chunkOffset = 0
-        loadedBytesPerChannel += usable
-        return true
+        check(handle != 0L) { "DsdFileReader 已关闭" }
+        return UsbDsdNative.readerRead(handle, out)
     }
 
     /**
@@ -137,24 +99,8 @@ class DsdFileReader private constructor(
      * 已到真实结尾时返回 true，让 [read] 正常返回 -1。
      */
     fun canReadAt(fileLength: Long): Boolean {
-        if (positionBytesPerChannel >= bytesPerChannel) {
-            return true
-        }
-        if (blockSizePerChannel > 0) {
-            if (chunkOffset < chunkLength) {
-                return true
-            }
-            val valid = (bytesPerChannel - loadedBytesPerChannel)
-                .coerceAtMost(blockSizePerChannel.toLong())
-            if (valid <= 0) {
-                return true
-            }
-            val groupStart = dataStart +
-                loadedBytesPerChannel / blockSizePerChannel * blockSizePerChannel * channels
-            // planar 块组内最后一个声道的段也要够 valid 字节
-            return fileLength >= groupStart + (channels - 1).toLong() * blockSizePerChannel + valid
-        }
-        return fileLength >= dataStart + (positionBytesPerChannel + 1) * channels
+        check(handle != 0L) { "DsdFileReader 已关闭" }
+        return UsbDsdNative.readerCanReadAt(handle, fileLength)
     }
 
     /**
@@ -162,234 +108,38 @@ class DsdFileReader private constructor(
      * 返回对齐后的实际位置（毫秒），用于进度上报。
      */
     fun seekTo(positionMs: Long): Long {
-        val target = (positionMs.coerceAtLeast(0L) * sampleRate / 8_000L).coerceAtMost(bytesPerChannel)
-        val aligned = if (blockSizePerChannel > 0) {
-            target / blockSizePerChannel * blockSizePerChannel
-        } else {
-            target / 2L * 2L
-        }
-        if (blockSizePerChannel > 0) {
-            loadedBytesPerChannel = aligned
-            chunkLength = 0
-            chunkOffset = 0
-        } else {
-            input.seek(dataStart + aligned * channels)
-        }
-        positionBytesPerChannel = aligned
-        return aligned * 8_000L / sampleRate
+        check(handle != 0L) { "DsdFileReader 已关闭" }
+        return UsbDsdNative.readerSeekTo(handle, positionMs)
     }
 
     override fun close() {
-        input.close()
+        if (handle != 0L) {
+            UsbDsdNative.readerDestroy(handle)
+            handle = 0L
+        }
     }
 
     companion object {
-        // LSB-first → MSB-first 的每字节位反转查表
-        private val BIT_REVERSE_TABLE = ByteArray(256) { index ->
-            var value = index
-            var reversed = 0
-            repeat(8) {
-                reversed = (reversed shl 1) or (value and 1)
-                value = value shr 1
-            }
-            reversed.toByte()
-        }
-
         /**
          * [streaming] 为 true 表示文件还在下载增长中：DFF 的数据大小按 chunk 头
          * 声明值取（此刻文件长度不足以作截断依据），可读进度由调用方配合
-         * [canReadAt] 控制。
+         * [canReadAt] 控制。文件缺失、非 DSF/DFF 或格式不支持时抛 [IOException]。
          */
         fun open(file: File, streaming: Boolean = false): DsdFileReader {
-            val input = RandomAccessFile(file, "r")
-            try {
-                val magic = ByteArray(4)
-                input.readFully(magic)
-                return when (String(magic, Charsets.US_ASCII)) {
-                    "DSD " -> openDsf(input)
-                    "FRM8" -> openDff(input, streaming)
-                    else -> throw IOException("Not a DSF/DFF file.")
-                }
-            } catch (error: Throwable) {
-                runCatching { input.close() }
-                throw error
+            val handle = UsbDsdNative.readerCreate()
+            val error = UsbDsdNative.readerOpen(handle, file.path, streaming)
+            if (error != null) {
+                UsbDsdNative.readerDestroy(handle)
+                throw IOException(error)
             }
-        }
-
-        private fun openDsf(input: RandomAccessFile): DsdFileReader {
-            val dsdChunkSize = input.readLongLe()
-            if (dsdChunkSize < 28L) {
-                throw IOException("Invalid DSF 'DSD ' chunk size: $dsdChunkSize")
-            }
-            input.seek(dsdChunkSize)
-
-            val fmtMagic = ByteArray(4)
-            input.readFully(fmtMagic)
-            if (String(fmtMagic, Charsets.US_ASCII) != "fmt ") {
-                throw IOException("DSF 'fmt ' chunk is missing.")
-            }
-            val fmtChunkSize = input.readLongLe()
-            input.readIntLe() // formatVersion
-            val formatId = input.readIntLe()
-            if (formatId != 0) {
-                throw IOException("Unsupported DSF format id: $formatId")
-            }
-            input.readIntLe() // channelType
-            val channels = input.readIntLe()
-            val sampleRate = input.readIntLe()
-            val bitsPerSample = input.readIntLe()
-            val sampleCount = input.readLongLe()
-            // 规范允许 blockSizePerChannel 不是 4096，按 header 实际值处理
-            val blockSize = input.readIntLe()
-            if (channels !in 1..6 || sampleRate <= 0 || blockSize <= 0) {
-                throw IOException(
-                    "Invalid DSF fmt: channels=$channels, sampleRate=$sampleRate, blockSize=$blockSize",
-                )
-            }
-            if (bitsPerSample != 1 && bitsPerSample != 8) {
-                throw IOException("Unsupported DSF bitsPerSample: $bitsPerSample")
-            }
-
-            input.seek(dsdChunkSize + fmtChunkSize)
-            val dataMagic = ByteArray(4)
-            input.readFully(dataMagic)
-            if (String(dataMagic, Charsets.US_ASCII) != "data") {
-                throw IOException("DSF 'data' chunk is missing.")
-            }
-            val dataChunkSize = input.readLongLe()
-            val dataStart = dsdChunkSize + fmtChunkSize + 12
-            val audioBytes = if (dataChunkSize >= 12L) dataChunkSize - 12L else input.length() - dataStart
-            val bytesPerChannel = minOf(sampleCount / 8L, audioBytes / channels)
-            input.seek(dataStart)
+            val info = UsbDsdNative.readerInfo(handle)
             return DsdFileReader(
-                input = input,
-                formatName = "dsf",
-                sampleRate = sampleRate,
-                channels = channels,
-                dataStart = dataStart,
-                bytesPerChannel = bytesPerChannel,
-                blockSizePerChannel = blockSize,
-                lsbFirst = bitsPerSample == 1,
+                handle = handle,
+                formatName = UsbDsdNative.readerFormatName(handle),
+                sampleRate = info[0].toInt(),
+                channels = info[1].toInt(),
+                durationMs = info[2],
             )
-        }
-
-        private fun openDff(input: RandomAccessFile, streaming: Boolean = false): DsdFileReader {
-            val formSize = input.readLongBe()
-            val formType = ByteArray(4)
-            input.readFully(formType)
-            if (String(formType, Charsets.US_ASCII) != "DSD ") {
-                throw IOException("Unsupported DFF form type.")
-            }
-
-            var sampleRate = 0
-            var channels = 0
-            var dataStart = -1L
-            var dataSize = 0L
-            var offset = 16L
-            val formEnd = minOf(12L + formSize, input.length())
-            val id = ByteArray(4)
-            while (offset + 12 <= formEnd) {
-                input.seek(offset)
-                input.readFully(id)
-                val chunkSize = input.readLongBe()
-                when (String(id, Charsets.US_ASCII)) {
-                    "PROP" -> {
-                        val propType = ByteArray(4)
-                        input.readFully(propType)
-                        if (String(propType, Charsets.US_ASCII) == "SND ") {
-                            var propOffset = offset + 16
-                            val propEnd = minOf(offset + 12 + chunkSize, formEnd)
-                            while (propOffset + 12 <= propEnd) {
-                                input.seek(propOffset)
-                                input.readFully(id)
-                                val subSize = input.readLongBe()
-                                when (String(id, Charsets.US_ASCII)) {
-                                    "FS  " -> sampleRate = input.readIntBe()
-                                    "CHNL" -> channels = input.readShortBe()
-                                    "CMPR" -> {
-                                        val compression = ByteArray(4)
-                                        input.readFully(compression)
-                                        if (String(compression, Charsets.US_ASCII) == "DST ") {
-                                            throw IOException("DST-compressed DFF is not supported.")
-                                        }
-                                    }
-                                }
-                                // IFF chunk 按偶数字节对齐
-                                propOffset += 12 + subSize + (subSize and 1L)
-                            }
-                        }
-                    }
-                    "DSD " -> {
-                        dataStart = offset + 12
-                        dataSize = chunkSize
-                    }
-                    "DST " -> throw IOException("DST-compressed DFF is not supported.")
-                }
-                offset += 12 + chunkSize + (chunkSize and 1L)
-            }
-
-            if (sampleRate <= 0 || channels !in 1..6 || dataStart < 0L) {
-                throw IOException(
-                    "Invalid DFF: sampleRate=$sampleRate, channels=$channels, hasData=${dataStart >= 0}",
-                )
-            }
-            // 流式下载中文件长度还在增长，数据大小只信 chunk 头声明值
-            val audioBytes = if (streaming) dataSize else minOf(dataSize, input.length() - dataStart)
-            input.seek(dataStart)
-            return DsdFileReader(
-                input = input,
-                formatName = "dff",
-                sampleRate = sampleRate,
-                channels = channels,
-                dataStart = dataStart,
-                bytesPerChannel = audioBytes / channels,
-                blockSizePerChannel = 0,
-                lsbFirst = false,
-            )
-        }
-
-        private fun RandomAccessFile.readIntLe(): Int {
-            val bytes = ByteArray(4)
-            readFully(bytes)
-            return (bytes[0].toInt() and 0xff) or
-                ((bytes[1].toInt() and 0xff) shl 8) or
-                ((bytes[2].toInt() and 0xff) shl 16) or
-                ((bytes[3].toInt() and 0xff) shl 24)
-        }
-
-        private fun RandomAccessFile.readLongLe(): Long {
-            var value = 0L
-            val bytes = ByteArray(8)
-            readFully(bytes)
-            for (index in 7 downTo 0) {
-                value = (value shl 8) or (bytes[index].toLong() and 0xff)
-            }
-            return value
-        }
-
-        private fun RandomAccessFile.readIntBe(): Int {
-            val bytes = ByteArray(4)
-            readFully(bytes)
-            return ((bytes[0].toInt() and 0xff) shl 24) or
-                ((bytes[1].toInt() and 0xff) shl 16) or
-                ((bytes[2].toInt() and 0xff) shl 8) or
-                (bytes[3].toInt() and 0xff)
-        }
-
-        private fun RandomAccessFile.readShortBe(): Int {
-            val bytes = ByteArray(2)
-            readFully(bytes)
-            return ((bytes[0].toInt() and 0xff) shl 8) or (bytes[1].toInt() and 0xff)
-        }
-
-        private fun RandomAccessFile.readLongBe(): Long {
-            var value = 0L
-            val bytes = ByteArray(8)
-            readFully(bytes)
-            for (index in 0 until 8) {
-                value = (value shl 8) or (bytes[index].toLong() and 0xff)
-            }
-            return value
         }
     }
 }
@@ -399,8 +149,9 @@ class DsdFileReader private constructor(
  * MSB-first 逐字节交错流，输出都交给 PcmIsoPacketizer 当普通 PCM 帧打包。
  * 会话级静音填充线程与写线程只依赖这三个方法，两种模式行为一致：
  * 静音一律 0x69，流一旦中断 DAC 就会掉出 DSD 模式（爆音/电流声）。
+ * 实现持有 native 句柄，会话结束时必须 close。
  */
-interface DsdStreamEncoder {
+interface DsdStreamEncoder : Closeable {
     /** 编码 [data] 的前 [length] 字节，不足一帧的余量留到下次。 */
     fun encode(data: ByteArray, length: Int = data.size): ByteArray
 
@@ -419,89 +170,42 @@ interface DsdStreamEncoder {
  * 24→32 slot 的高位对齐移位恰好得到规范要求的"DoP 24 位放高位、低 8 位补零"。
  * 注意：DoP 数据被任何后续 DSP（音量、抖动、重采样）修改都会破坏标记、输出全幅噪声。
  */
-class DopPacketizer(private val channels: Int) : DsdStreamEncoder {
-    private val frameBytes = 2 * channels
-    private var marker = 0x05
-    private val carry = ByteArray(frameBytes)
-    private var carryLength = 0
+class DopPacketizer(channels: Int) : DsdStreamEncoder {
+    private var handle = UsbDsdNative.dopCreate(channels)
 
     override fun encode(data: ByteArray, length: Int): ByteArray {
-        val total = carryLength + length
-        val frames = total / frameBytes
-        val output = ByteArray(frames * channels * 3)
-        var outputOffset = 0
-        var consumed = 0
-        repeat(frames) {
-            // 帧内逐声道装两个字节：时间靠前的放 bits 15-8
-            for (channel in 0 until channels) {
-                val early = byteAt(data, consumed + channel)
-                val late = byteAt(data, consumed + channels + channel)
-                output[outputOffset + channel * 3] = late
-                output[outputOffset + channel * 3 + 1] = early
-                output[outputOffset + channel * 3 + 2] = marker.toByte()
-            }
-            consumed += frameBytes
-            outputOffset += channels * 3
-            marker = if (marker == 0x05) 0xFA else 0x05
-        }
-
-        // 更新余量：把没吃完的尾巴挪到 carry 开头
-        val leftover = total - frames * frameBytes
-        if (leftover > 0) {
-            val tail = ByteArray(leftover)
-            for (index in 0 until leftover) {
-                tail[index] = byteAt(data, frames * frameBytes + index)
-            }
-            System.arraycopy(tail, 0, carry, 0, leftover)
-        }
-        carryLength = leftover
-        return output
+        check(handle != 0L) { "DopPacketizer 已关闭" }
+        return UsbDsdNative.encoderEncode(handle, data, length)
     }
 
     /** DoP 静音：payload 0x69 0x69，标记正常交替。 */
     override fun encodeSilence(frames: Int): ByteArray {
-        val output = ByteArray(frames * channels * 3)
-        var outputOffset = 0
-        val silence = DSD_SILENCE_BYTE.toByte()
-        repeat(frames) {
-            for (channel in 0 until channels) {
-                output[outputOffset + channel * 3] = silence
-                output[outputOffset + channel * 3 + 1] = silence
-                output[outputOffset + channel * 3 + 2] = marker.toByte()
-            }
-            outputOffset += channels * 3
-            marker = if (marker == 0x05) 0xFA else 0x05
-        }
-        return output
+        check(handle != 0L) { "DopPacketizer 已关闭" }
+        return UsbDsdNative.encoderEncodeSilence(handle, frames)
     }
 
     override fun drain(): ByteArray {
-        if (carryLength == 0) {
-            return ByteArray(0)
-        }
-        val padding = ByteArray(frameBytes - carryLength) { DSD_SILENCE_BYTE.toByte() }
-        return encode(padding)
+        check(handle != 0L) { "DopPacketizer 已关闭" }
+        return UsbDsdNative.encoderDrain(handle)
     }
 
     /** seek 后重置：标记回到起始相位，丢弃余量。 */
     fun reset() {
-        marker = 0x05
-        carryLength = 0
+        check(handle != 0L) { "DopPacketizer 已关闭" }
+        UsbDsdNative.dopReset(handle)
     }
 
-    // 逻辑上 carry 与 data 是拼接的一段流，按拼接后的下标取字节
-    private fun byteAt(data: ByteArray, index: Int): Byte {
-        return if (index < carryLength) carry[index] else data[index - carryLength]
+    override fun close() {
+        if (handle != 0L) {
+            UsbDsdNative.encoderDestroy(handle)
+            handle = 0L
+        }
     }
 }
 
 /** quirk `nativeDsd.format` → 每声道每帧字节数；未知格式返回 null。 */
-fun nativeDsdBytesPerSample(format: String?): Int? = when (format) {
-    "u8" -> 1
-    "u16le" -> 2
-    "u32le", "u32be" -> 4
-    else -> null
-}
+fun nativeDsdBytesPerSample(format: String?): Int? =
+    format?.let { UsbDsdNative.nativeDsdBytesPerSample(it) }?.takeIf { it > 0 }
 
 /**
  * Native DSD 打包：把交错 DSD 字节流按设备期望的 subslot 排列重组，直接当
@@ -512,58 +216,31 @@ fun nativeDsdBytesPerSample(format: String?): Int? = when (format) {
  * 静音同样是 0x69（重排后仍是 0x69），流中断一样会让 DAC 掉出 DSD 模式。
  */
 class NativeDsdPacketizer(
-    private val channels: Int,
-    private val bytesPerSample: Int,
-    private val bigEndian: Boolean,
+    channels: Int,
+    bytesPerSample: Int,
+    bigEndian: Boolean,
 ) : DsdStreamEncoder {
-    private val frameBytes = bytesPerSample * channels
-    private val carry = ByteArray(frameBytes)
-    private var carryLength = 0
+    private var handle = UsbDsdNative.nativeDsdCreate(channels, bytesPerSample, bigEndian)
 
     override fun encode(data: ByteArray, length: Int): ByteArray {
-        val total = carryLength + length
-        val frames = total / frameBytes
-        val output = ByteArray(frames * frameBytes)
-        var outputOffset = 0
-        var consumed = 0
-        repeat(frames) {
-            // 交错流 L0 R0 L1 R1… → 每声道连续 bytesPerSample 字节（LE 时间正序 / BE 倒序）
-            for (channel in 0 until channels) {
-                for (sampleIndex in 0 until bytesPerSample) {
-                    val slotIndex = if (bigEndian) bytesPerSample - 1 - sampleIndex else sampleIndex
-                    output[outputOffset + channel * bytesPerSample + slotIndex] =
-                        byteAt(data, consumed + sampleIndex * channels + channel)
-                }
-            }
-            consumed += frameBytes
-            outputOffset += frameBytes
-        }
-
-        val leftover = total - frames * frameBytes
-        if (leftover > 0) {
-            val tail = ByteArray(leftover)
-            for (index in 0 until leftover) {
-                tail[index] = byteAt(data, frames * frameBytes + index)
-            }
-            System.arraycopy(tail, 0, carry, 0, leftover)
-        }
-        carryLength = leftover
-        return output
+        check(handle != 0L) { "NativeDsdPacketizer 已关闭" }
+        return UsbDsdNative.encoderEncode(handle, data, length)
     }
 
     override fun encodeSilence(frames: Int): ByteArray {
-        return ByteArray(frames * frameBytes) { DSD_SILENCE_BYTE.toByte() }
+        check(handle != 0L) { "NativeDsdPacketizer 已关闭" }
+        return UsbDsdNative.encoderEncodeSilence(handle, frames)
     }
 
     override fun drain(): ByteArray {
-        if (carryLength == 0) {
-            return ByteArray(0)
-        }
-        val padding = ByteArray(frameBytes - carryLength) { DSD_SILENCE_BYTE.toByte() }
-        return encode(padding)
+        check(handle != 0L) { "NativeDsdPacketizer 已关闭" }
+        return UsbDsdNative.encoderDrain(handle)
     }
 
-    private fun byteAt(data: ByteArray, index: Int): Byte {
-        return if (index < carryLength) carry[index] else data[index - carryLength]
+    override fun close() {
+        if (handle != 0L) {
+            UsbDsdNative.encoderDestroy(handle)
+            handle = 0L
+        }
     }
 }

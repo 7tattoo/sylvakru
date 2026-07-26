@@ -3282,6 +3282,8 @@ class UsbExclusiveAudioEngine(
             updateSessionDiagnostics("closed", mapOf("reason" to reason, "atMs" to System.currentTimeMillis()))
             mainHandler.removeCallbacks(deferredCloseRunnable)
             stopDopIdleFiller()
+            // 打包器已 JNI 化持有 native 句柄，会话硬关闭时统一释放
+            sessionDsd?.close()
             sessionDsd = null
             sessionPacketizer = null
             sessionDsdKind = null
