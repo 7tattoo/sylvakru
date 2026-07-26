@@ -1,4 +1,3 @@
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_gamepads/flutter_gamepads.dart';
@@ -11,6 +10,7 @@ import 'package:sylvakru/base/services/interaction.dart';
 import 'package:sylvakru/base/services/my_window_listener.dart';
 import 'package:sylvakru/base/utils/dynamic_lyrics_page_route.dart';
 import 'package:sylvakru/base/utils/metadata_utils.dart';
+import 'package:sylvakru/base/widgets/blurred_cover_art_widget.dart';
 import 'package:sylvakru/base/widgets/cover_art_widget.dart';
 import 'package:sylvakru/big_picture_view/panels/big_albums_panel.dart';
 import 'package:sylvakru/big_picture_view/panels/big_home_panel.dart';
@@ -58,9 +58,11 @@ class _BigPictureViewState extends State<BigPictureView> {
             if (mainPageThemeNotifier.value != .vivid) {
               return SizedBox.shrink();
             }
-            return CoverArtWidget(
+            return BlurredCoverArtWidget(
               song: currentSongNotifier.value,
               color: currentCoverArtColor,
+              sigmaX: MediaQuery.widthOf(context) * 0.03,
+              sigmaY: MediaQuery.heightOf(context) * 0.03,
             );
           },
         ),
@@ -73,20 +75,12 @@ class _BigPictureViewState extends State<BigPictureView> {
             if (mainPageThemeNotifier.value != .vivid) {
               return SizedBox.shrink();
             }
-            final pageWidth = MediaQuery.widthOf(context);
-            final pageHight = MediaQuery.heightOf(context);
 
             return RepaintBoundary(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(
-                  sigmaX: pageWidth * 0.03,
-                  sigmaY: pageHight * 0.03,
-                ),
-                child: AnimatedContainer(
-                  duration: Duration(milliseconds: 500),
-                  curve: Curves.easeInOutCubic,
-                  color: currentCoverArtColor.withAlpha(180),
-                ),
+              child: AnimatedContainer(
+                duration: Duration(milliseconds: 500),
+                curve: Curves.easeInOutCubic,
+                color: currentCoverArtColor.withAlpha(180),
               ),
             );
           },
