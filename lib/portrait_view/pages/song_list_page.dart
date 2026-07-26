@@ -366,7 +366,7 @@ extension _SongListPage on _SongListState {
             currentSongListNotifier: currentSongListNotifier,
             offset: 300 - MediaQuery.heightOf(context) / 2,
             displayIndexOf: (index) => albumStructureActive
-                ? albumStructureRows.indexOf(index)
+                ? albumStructureDisplayIndex(index)
                 : index,
           ),
         ),
@@ -420,11 +420,12 @@ extension _SongListPage on _SongListState {
   Widget albumHeaderTile(List<MyAudioMetadata> currentSongList, int start) {
     final l10n = AppLocalizations.of(context);
     final song = currentSongList[start];
+    final album = getAlbum(song);
     return ListTile(
       contentPadding: EdgeInsets.fromLTRB(20, 0, 20, 0),
       leading: CoverArtWidget(size: 40, borderRadius: 4, song: song),
       title: Text(
-        getAlbum(song),
+        album,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(fontWeight: FontWeight.bold),
       ),
@@ -432,6 +433,14 @@ extension _SongListPage on _SongListState {
         l10n.songCount(albumStructureGroupCount(start)),
         style: TextStyle(fontSize: 12),
       ),
+      trailing: Icon(
+        collapsedAlbums.contains(album) ? Icons.expand_more : Icons.expand_less,
+        color: iconColor.value,
+      ),
+      onTap: () {
+        tryVibrate();
+        toggleAlbumCollapsed(album);
+      },
     );
   }
 

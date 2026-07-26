@@ -30,7 +30,7 @@ extension _SongListPanel on _SongListState {
                 return;
               }
               final displayIndex = albumStructureActive
-                  ? albumStructureRows.indexOf(index)
+                  ? albumStructureDisplayIndex(index)
                   : index;
               final position = scrollController.position;
               final maxScrollExtent = position.maxScrollExtent;
@@ -573,33 +573,46 @@ extension _SongListPanel on _SongListState {
     );
   }
 
-  // 专辑结构模式的专辑头行（封面 + 专辑名 + 歌数）
+  // 专辑结构模式的专辑头行（封面 + 专辑名 + 歌数），点击收起/展开
   Widget albumHeaderRow(List<MyAudioMetadata> currentSongList, int start) {
     final song = currentSongList[start];
-    return Row(
-      children: [
-        SizedBox(
-          width: 60,
-          child: Center(
-            child: CoverArtWidget(size: 40, borderRadius: 4, song: song),
+    final album = getAlbum(song);
+    return InkWell(
+      onTap: () {
+        toggleAlbumCollapsed(album);
+      },
+      child: Row(
+        children: [
+          SizedBox(
+            width: 60,
+            child: Center(
+              child: CoverArtWidget(size: 40, borderRadius: 4, song: song),
+            ),
           ),
-        ),
-        Expanded(
-          child: Text(
-            getAlbum(song),
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontWeight: FontWeight.bold),
+          Expanded(
+            child: Text(
+              album,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
-        ),
-        SizedBox(width: 10),
-        Text(
-          AppLocalizations.of(
-            context,
-          ).songCount(albumStructureGroupCount(start)),
-          style: TextStyle(fontSize: 12),
-        ),
-        SizedBox(width: 20),
-      ],
+          SizedBox(width: 10),
+          Text(
+            AppLocalizations.of(
+              context,
+            ).songCount(albumStructureGroupCount(start)),
+            style: TextStyle(fontSize: 12),
+          ),
+          SizedBox(width: 10),
+          Icon(
+            collapsedAlbums.contains(album)
+                ? Icons.expand_more
+                : Icons.expand_less,
+            color: iconColor.value,
+          ),
+          SizedBox(width: 20),
+        ],
+      ),
     );
   }
 

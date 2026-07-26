@@ -106,6 +106,8 @@ class _SongListState extends State<SongList> {
   // 专辑结构显示行：>=0 为 currentSongList 中的歌曲索引，
   // 负值 -(i+1) 表示从歌曲索引 i 开始的一段专辑的专辑头
   List<int> albumStructureRows = [];
+  // 专辑结构模式中被收起的专辑
+  final collapsedAlbums = <String>{};
 
   final listIsScrollingNotifier = ValueNotifier(false);
   final scrollController = ScrollController();
@@ -170,7 +172,9 @@ class _SongListState extends State<SongList> {
           lastAlbum = album;
           albumStructureRows.add(-i - 1);
         }
-        albumStructureRows.add(i);
+        if (!collapsedAlbums.contains(album)) {
+          albumStructureRows.add(i);
+        }
       }
     }
     currentSongListNotifier.value = filteredSongList;
@@ -271,6 +275,31 @@ class _SongListState extends State<SongList> {
     updateSongList();
     sortTypeNotifier.addListener(updateSongList);
     textController.addListener(updateSongList);
+  }
+
+  // 收起/展开专辑段
+  void toggleAlbumCollapsed(String album) {
+    if (!collapsedAlbums.remove(album)) {
+      collapsedAlbums.add(album);
+    }
+    updateSongList();
+  }
+
+  // 歌曲在专辑结构列表中的显示行；被收起时退回其专辑头所在行
+  int albumStructureDisplayIndex(int index) {
+    final display = albumStructureRows.indexOf(index);
+    if (display != -1) {
+      return display;
+    }
+    final list = currentSongListNotifier.value;
+    final album = getAlbum(list[index]);
+    for (int i = 0; i < albumStructureRows.length; i++) {
+      final row = albumStructureRows[i];
+      if (row < 0 && getAlbum(list[-row - 1]) == album) {
+        return i;
+      }
+    }
+    return 0;
   }
 
   // 专辑头对应专辑段的歌曲数（start 为该段首曲在 currentSongList 中的索引）
