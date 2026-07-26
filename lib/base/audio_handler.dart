@@ -1351,9 +1351,21 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     final bytesPerSecond =
         ((song.bitrate ?? 0) > 0 ? song.bitrate! : 2000) * 1000 ~/ 8;
     final startBytes = bytesPerSecond * 10;
+    // 等水位设总超时：下载失败或速度跟不上时回退共享流式立即出声，
+    // 不能让用户点了切歌却一直无声等下去；后台缓存下载继续，完成后可走独占
+    final waitDeadline = DateTime.now().add(const Duration(seconds: 15));
     var lastSize = -1;
     while (true) {
       if (generation != null && generation != _loadGeneration) {
+        return null;
+      }
+      if (DateTime.now().isAfter(waitDeadline)) {
+        logger.output(
+          "usb exclusive streaming watermark timeout, fallback to shared output",
+        );
+        debugPrint(
+          "usb exclusive streaming watermark timeout, fallback to shared output",
+        );
         return null;
       }
       if (song.cacheExist && song.cachePath != null) {
