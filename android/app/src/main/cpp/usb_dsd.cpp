@@ -3,9 +3,30 @@
 #include <algorithm>
 #include <cstring>
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
 namespace sylvakru {
 
 namespace {
+
+// Windows 的 fopen 按 ANSI 代码页解释路径，UTF-8 路径（中日文文件名）会
+// 打不开；转宽字符走 _wfopen。其余平台的 fopen 本身就吃 UTF-8。
+FILE* openBinaryForRead(const std::string& path) {
+#if defined(_WIN32)
+    const int wide_length =
+        MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
+    if (wide_length <= 0) {
+        return nullptr;
+    }
+    std::wstring wide(static_cast<size_t>(wide_length), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, &wide[0], wide_length);
+    return _wfopen(wide.c_str(), L"rb");
+#else
+    return fopen(path.c_str(), "rb");
+#endif
+}
 
 // 64 位安全的 stdio 定位（DSD 专辑单文件可超 4GB）
 bool seekAbsolute(FILE* file, int64_t offset) {
@@ -149,7 +170,7 @@ void DsdFileReader::close() {
 
 DsdResult DsdFileReader::open(const std::string& path, bool streaming) {
     close();
-    input_ = fopen(path.c_str(), "rb");
+    input_ = openBinaryForRead(path);
     if (input_ == nullptr) {
         return {DsdError::kOpenFailed, "Failed to open DSD file."};
     }
