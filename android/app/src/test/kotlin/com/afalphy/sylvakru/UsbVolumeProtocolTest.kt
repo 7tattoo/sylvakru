@@ -1,5 +1,6 @@
 package com.afalphy.sylvakru
 
+import android.media.AudioFormat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -12,6 +13,13 @@ import kotlin.math.roundToInt
 
 class UsbVolumeProtocolTest {
     private val protocol = IbassoHidVolumeProtocol
+
+    @Test
+    fun mapsAndroidPcmEncodingsToBitDepths() {
+        assertEquals(16, bitDepthFromPcmEncoding(AudioFormat.ENCODING_PCM_16BIT))
+        assertEquals(24, bitDepthFromPcmEncoding(AudioFormat.ENCODING_PCM_24BIT_PACKED))
+        assertEquals(32, bitDepthFromPcmEncoding(AudioFormat.ENCODING_PCM_32BIT))
+    }
 
     @Test
     fun selectsUsbSlotFromPcmSourceBitDepthInAutoMode() {

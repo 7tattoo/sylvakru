@@ -7,6 +7,7 @@ import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
+import android.media.AudioFormat
 import android.media.MediaCodec
 import android.media.MediaCodecList
 import android.media.MediaDataSource
@@ -223,6 +224,20 @@ internal fun hardwareVolumeReadbackMatches(targetQ8_8: Int, actualQ8_8: Int, ste
         return actualQ8_8 == targetQ8_8
     }
     return kotlin.math.abs(actualQ8_8 - targetQ8_8) <= stepQ8_8.coerceAtLeast(1)
+}
+
+internal fun bitDepthFromPcmEncoding(pcmEncoding: Int?): Int {
+    return when (pcmEncoding) {
+        AudioFormat.ENCODING_PCM_8BIT -> 8
+        AudioFormat.ENCODING_PCM_16BIT -> 16
+        AudioFormat.ENCODING_PCM_FLOAT,
+        AudioFormat.ENCODING_PCM_32BIT,
+        -> 32
+        AudioFormat.ENCODING_PCM_24BIT_PACKED,
+        0x80000000.toInt(),
+        -> 24
+        else -> 16
+    }
 }
 
 class UsbExclusiveAudioEngine(
@@ -5523,15 +5538,6 @@ class UsbExclusiveAudioEngine(
             "format" to null,
             "message" to message,
         )
-    }
-
-    private fun bitDepthFromPcmEncoding(pcmEncoding: Int?): Int {
-        return when (pcmEncoding) {
-            3 -> 8
-            4 -> 32
-            0x80000000.toInt() -> 24
-            else -> 16
-        }
     }
 
     private data class OutputTarget(
