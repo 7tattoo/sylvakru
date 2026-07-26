@@ -40,6 +40,7 @@ if(ANDROID)
         sylvakru_usb_exclusive
         SHARED
         usb_exclusive_engine.cpp
+        flac_decoder_jni.cpp
     )
 
     find_library(log-lib log)
