@@ -49,7 +49,39 @@ class SongListTile extends StatelessWidget {
       builder: (context, value, child) {
         return ListTile(
           contentPadding: EdgeInsets.fromLTRB(20, 0, 0, 0),
-          leading: CoverArtWidget(size: 40, borderRadius: 4, song: song),
+          // 正在播放的歌曲在封面上叠播放角标，主题高亮色与正文同色时也能一眼区分
+          leading: ValueListenableBuilder(
+            valueListenable: currentSongNotifier,
+            builder: (_, currentSong, _) {
+              final coverArt = CoverArtWidget(
+                size: 40,
+                borderRadius: 4,
+                song: song,
+              );
+              if (song != currentSong) {
+                return coverArt;
+              }
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  coverArt,
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.black38,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Icon(
+                      Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
           title: ValueListenableBuilder(
             valueListenable: currentSongNotifier,
             builder: (_, currentSong, _) {

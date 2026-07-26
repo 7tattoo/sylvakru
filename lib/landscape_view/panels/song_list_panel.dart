@@ -654,26 +654,10 @@ extension _SongListPanel on _SongListState {
             ),
           ),
           Expanded(
-            child: ValueListenableBuilder(
-              valueListenable: currentSongNotifier,
-              builder: (_, currentSong, _) {
-                return ValueListenableBuilder(
-                  valueListenable: highlightTextColor.valueNotifier,
-                  builder: (context, value, child) {
-                    return Text(
-                      album,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        // 正在播放的专辑用高亮色区分，与歌曲行高亮一致
-                        color: albumStructureGroupIsPlaying(album)
-                            ? value
-                            : null,
-                      ),
-                    );
-                  },
-                );
-              },
+            child: Text(
+              album,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
           SizedBox(width: 10),
@@ -889,10 +873,32 @@ extension _SongListPanel on _SongListState {
     return ValueListenableBuilder(
       valueListenable: currentSongNotifier,
       builder: (_, currentSong, _) {
+        final coverArt = CoverArtWidget(size: 40, borderRadius: 4, song: song);
         return ListTile(
           contentPadding: .zero,
           visualDensity: const VisualDensity(horizontal: 0, vertical: -4),
-          leading: CoverArtWidget(size: 40, borderRadius: 4, song: song),
+          // 正在播放的歌曲在封面上叠播放角标，主题高亮色与正文同色时也能一眼区分
+          leading: song != currentSong
+              ? coverArt
+              : Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    coverArt,
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.black38,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Icon(
+                        Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ],
+                ),
           title: ValueListenableBuilder(
             valueListenable: highlightTextColor.valueNotifier,
             builder: (context, value, child) {

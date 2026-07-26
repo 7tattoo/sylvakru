@@ -289,14 +289,6 @@ class _SongListState extends State<SongList> {
     textController.addListener(updateSongList);
   }
 
-  // 当前播放歌曲是否属于该专辑段（用于专辑头高亮）
-  bool albumStructureGroupIsPlaying(String album) {
-    final current = currentSongNotifier.value;
-    return current != null &&
-        getAlbum(current) == album &&
-        currentSongListNotifier.value.contains(current);
-  }
-
   // 收起/展开专辑段
   void toggleAlbumCollapsed(String album) {
     if (!collapsedAlbums.remove(album)) {
