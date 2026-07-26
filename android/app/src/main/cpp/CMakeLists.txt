@@ -52,7 +52,17 @@ if(ANDROID)
 endif()
 
 option(SYLVAKRU_BUILD_HOST_TESTS "Build Sylvakru native host tests" OFF)
+set(
+    SYLVAKRU_FLAC_TESTDATA_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/testdata"
+    CACHE STRING
+    "Sylvakru FLAC 测试 fixture 目录（设备上运行时覆盖为设备路径）"
+)
 if(SYLVAKRU_BUILD_HOST_TESTS)
     add_executable(flac_decoder_test tests/flac_decoder_test.cpp)
+    target_compile_definitions(
+        flac_decoder_test
+        PRIVATE SYLVAKRU_FLAC_TESTDATA_DIR="${SYLVAKRU_FLAC_TESTDATA_DIR}"
+    )
     target_link_libraries(flac_decoder_test PRIVATE sylvakru_flac_decoder)
 endif()
