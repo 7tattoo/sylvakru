@@ -552,9 +552,10 @@ internal fun unsafeDsdVolumeReason(
         return "DSD playback requires active hardware volume."
     }
     // 回读失灵但冻结在本会话可信硬件值上：实际音量只可能 ≤ 可信值，允许
-    // 继续播放；升音量请求在冻结路径里已被拒绝。write-only 从未有过可信
-    // 回读，不适用。
-    if (frozenAtTrustedTarget && !writeOnly) return null
+    // 继续播放；升音量请求在冻结路径里已被拒绝。可信值只可能来自已验证
+    // 回读或设备事件（write-only 从始至终不会产生可信目标，也就进不了
+    // 冻结且 active 的状态），因此 reader 中途失联转 write-only 时同样适用。
+    if (frozenAtTrustedTarget) return null
     if (writeOnly || !readbackVerified) {
         return "DSD playback requires readable hardware volume confirmation."
     }

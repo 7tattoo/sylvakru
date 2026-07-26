@@ -150,8 +150,9 @@ class UsbVolumeProtocolTest {
                 frozenAtTrustedTarget = true,
             ),
         )
-        assertEquals(
-            "DSD playback requires readable hardware volume confirmation.",
+        // reader 中途失联转 write-only 也一样：可信值只可能来自已验证回读或
+        // 设备事件，冻结在可信值上实际音量只可能 ≤ 可信值，继续播放
+        assertNull(
             unsafeDsdVolumeReason(
                 isDsd = true,
                 hardwareVolumeActive = true,

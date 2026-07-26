@@ -75,6 +75,12 @@ private const val USB_RECIP_INTERFACE = 0x01
 private const val USB_RECIP_ENDPOINT = 0x02
 private const val IBASSO_READER_TIMEOUT_MS = 100
 private const val IBASSO_PENDING_READ_FAILURE_LIMIT = 3
+
+// native DSD 流式期间部分 DAC（如 Macaron）的 HID 回读常见短暂失速：写入已
+// 生效、回读约 1 秒内自行恢复（真机日志），PCM 的 3 次阈值（约 0.3 秒）会把
+// 慢误判成死导致冻结/暂停。DSD 放宽到 8 次（约 1 秒判定窗口）；PCM 保持 3 次
+// 以便尽快切换数字音量兜底。
+private const val IBASSO_PENDING_READ_FAILURE_LIMIT_DSD = 8
 private const val IBASSO_READER_RESTART_INITIAL_DELAY_MS = 50L
 private const val IBASSO_READER_RESTART_RETRY_DELAY_MS = 25L
 private const val IBASSO_READER_RESTART_EXIT_CHECKS = 9
@@ -2527,7 +2533,11 @@ class UsbExclusiveAudioEngine(
                                     ibassoPendingResponses.isNotEmpty(),
                                 )
                                 ibassoReaderHealth.hasPersistentPendingFailure(
-                                    IBASSO_PENDING_READ_FAILURE_LIMIT,
+                                    if (sessionDsdKind != null) {
+                                        IBASSO_PENDING_READ_FAILURE_LIMIT_DSD
+                                    } else {
+                                        IBASSO_PENDING_READ_FAILURE_LIMIT
+                                    },
                                 )
                             }
                             if (length > 0) {
@@ -2720,11 +2730,24 @@ class UsbExclusiveAudioEngine(
         val isDsd = sessionDsdKind != null
         synchronized(volumeLock) {
             if (isDsd) {
-                paused.set(true)
-                hardwareVolumeActive = false
-                volumeControlEnabled = false
-                hardwareVolumeSyncPending = false
-                hardwareVolumeFrozen = true
+                // reader 失联但本会话存在已验证的可信值：冻结在可信值上继续
+                // 播放（实际音量只可能 ≤ 可信值），升音量请求被冻结路径拒绝，
+                // 后续音量事务复活 reader 回读成功后解冻；无可信值才暂停
+                val trusted = trustedIbassoTargetForDevice(
+                    ibassoLastAppliedTarget,
+                    ibassoLastAppliedDeviceId,
+                    ibassoVolumeDeviceId ?: -1,
+                )
+                val device = sessionDevice?.takeIf { it.deviceId == ibassoVolumeDeviceId }
+                if (trusted != null && device != null) {
+                    freezeIbassoDsdVolume(device, trusted)
+                } else {
+                    paused.set(true)
+                    hardwareVolumeActive = false
+                    volumeControlEnabled = false
+                    hardwareVolumeSyncPending = false
+                    hardwareVolumeFrozen = true
+                }
             } else {
                 freezeIbassoPcmVolume(
                     trustedIbassoTargetForDevice(
@@ -2738,7 +2761,7 @@ class UsbExclusiveAudioEngine(
             updateState(
                 currentState + mapOf(
                     "hardwareVolumeReader" to "writeOnly",
-                    "playing" to (currentState["active"] == true && !isDsd && !paused.get()),
+                    "playing" to (currentState["active"] == true && !paused.get()),
                     "hardwareVolumeActive" to hardwareVolumeActive,
                     "digitalVolumeActive" to volumeControlEnabled,
                     "hardwareVolumeWriteOnly" to true,
