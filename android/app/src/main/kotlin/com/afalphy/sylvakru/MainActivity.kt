@@ -18,6 +18,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.KeyEvent
+import android.view.MotionEvent
+import android.hardware.input.InputManager
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
@@ -31,8 +33,13 @@ import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import org.flame_engine.gamepads_android.GamepadsCompatibleActivity
 
-class MainActivity : AudioServiceActivity() {
+class MainActivity : AudioServiceActivity(), GamepadsCompatibleActivity {
+    // gamepads 插件在 onAttachedToActivity 时强转本接口，缺实现会启动即崩（上游 main 同款实现）
+    var keyListener: ((KeyEvent) -> Boolean)? = null
+    var motionListener: ((MotionEvent) -> Boolean)? = null
+
     private val tag = "UsbExclusiveAudioEngine"
     private val channelName = "com.afalphy.sylvakru/usb_audio"
     private val superLyricChannelName = "com.afalphy.sylvakru/super_lyric"
@@ -128,7 +135,8 @@ class MainActivity : AudioServiceActivity() {
         ensureSuperLyricPublisherRegistered()
     }
 
-    // 独占播放的音量由应用接管，仅在 Activity 前台拦截手机物理音量键。
+    // 独占播放的音量由应用接管，仅在 Activity 前台拦截手机物理音量键；
+    // 非音量键再交给 gamepads 的按键监听，最后走系统默认分发。
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val keyCode = event.keyCode
         val isVolumeKey =
@@ -147,7 +155,30 @@ class MainActivity : AudioServiceActivity() {
             }
             return true
         }
+        if (keyListener?.invoke(event) == true) {
+            return true
+        }
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(motionEvent: MotionEvent): Boolean {
+        return motionListener?.invoke(motionEvent) ?: false
+    }
+
+    override fun registerInputDeviceListener(
+        listener: InputManager.InputDeviceListener,
+        handler: Handler?,
+    ) {
+        val inputManager = getSystemService(INPUT_SERVICE) as InputManager
+        inputManager.registerInputDeviceListener(listener, null)
+    }
+
+    override fun registerKeyEventHandler(handler: (KeyEvent) -> Boolean) {
+        keyListener = handler
+    }
+
+    override fun registerMotionEventHandler(handler: (MotionEvent) -> Boolean) {
+        motionListener = handler
     }
 
     override fun onDestroy() {
