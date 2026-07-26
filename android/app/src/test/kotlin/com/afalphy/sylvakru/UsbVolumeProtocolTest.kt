@@ -564,7 +564,28 @@ class UsbVolumeProtocolTest {
     }
 
     @Test
-    fun keepsDsdVerificationImmediateAndCancelsStaleSessions() {
+    fun waitsForDsdReaderRestartThenVerifiesWithoutFreezingPcm() {
+        assertEquals(
+            IbassoReaderRecoveryAction.WAIT,
+            ibassoReaderRecoveryAction(
+                isDsd = true,
+                health = IbassoReaderHealth(restartRequested = true),
+                readerRunning = false,
+                generationMatches = true,
+                waitExpired = false,
+            ),
+        )
+        assertEquals(
+            IbassoReaderRecoveryAction.VERIFY_NOW,
+            ibassoReaderRecoveryAction(
+                isDsd = true,
+                health = IbassoReaderHealth().afterFailure().afterRestart(),
+                readerRunning = true,
+                generationMatches = true,
+                waitExpired = false,
+            ),
+        )
+        // 超时后 DSD 仍是 VERIFY_NOW（走严格验证结局），不得落到 FREEZE_PCM
         assertEquals(
             IbassoReaderRecoveryAction.VERIFY_NOW,
             ibassoReaderRecoveryAction(
@@ -572,7 +593,7 @@ class UsbVolumeProtocolTest {
                 health = IbassoReaderHealth(restartRequested = true),
                 readerRunning = false,
                 generationMatches = true,
-                waitExpired = false,
+                waitExpired = true,
             ),
         )
         assertEquals(

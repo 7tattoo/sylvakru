@@ -66,7 +66,12 @@ internal fun ibassoReaderRecoveryAction(
     waitExpired: Boolean,
 ): IbassoReaderRecoveryAction = when {
     !generationMatches -> IbassoReaderRecoveryAction.CANCEL
-    isDsd -> IbassoReaderRecoveryAction.VERIFY_NOW
+    // DSD 同样等待有界的 reader 重启：Macaron 切到 native DSD alt 后 HID 有
+    // 数百 ms 失聪期，reader 重启中立刻验证必然瞬间 3 连败触发安全门拒启动。
+    // 等待超时后仍 VERIFY_NOW 走严格的 DSD 验证结局，绝不落到 FREEZE_PCM。
+    isDsd && (waitExpired || (readerRunning && !health.restartRequested)) ->
+        IbassoReaderRecoveryAction.VERIFY_NOW
+    isDsd -> IbassoReaderRecoveryAction.WAIT
     health.writeOnly -> IbassoReaderRecoveryAction.FREEZE_PCM
     readerRunning && !health.restartRequested -> IbassoReaderRecoveryAction.VERIFY_NOW
     waitExpired -> IbassoReaderRecoveryAction.FREEZE_PCM
