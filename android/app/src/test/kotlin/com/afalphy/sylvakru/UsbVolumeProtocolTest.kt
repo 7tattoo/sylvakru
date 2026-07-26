@@ -7,10 +7,10 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.abs
-import kotlin.math.pow
-import kotlin.math.roundToInt
 
+// 增益换算/音量表/HID 报文/验证与恢复决策等数值用例已随实现下沉，
+// 由 cpp/tests/usb_volume_protocol_test.cpp 真机对拍接管；
+// 本文件只保留仍在 Kotlin 层的会话策略与状态机用例。
 class UsbVolumeProtocolTest {
     private val protocol = IbassoHidVolumeProtocol
 
@@ -19,14 +19,6 @@ class UsbVolumeProtocolTest {
         assertEquals(16, bitDepthFromPcmEncoding(AudioFormat.ENCODING_PCM_16BIT))
         assertEquals(24, bitDepthFromPcmEncoding(AudioFormat.ENCODING_PCM_24BIT_PACKED))
         assertEquals(32, bitDepthFromPcmEncoding(AudioFormat.ENCODING_PCM_32BIT))
-    }
-
-    @Test
-    fun selectsUsbSlotFromPcmSourceBitDepthInAutoMode() {
-        assertEquals(16, preferredAutoPcmBitDepth(16, listOf(16, 24, 32)))
-        assertEquals(24, preferredAutoPcmBitDepth(20, listOf(16, 24, 32)))
-        assertEquals(24, preferredAutoPcmBitDepth(null, listOf(16, 24, 32)))
-        assertNull(preferredAutoPcmBitDepth(32, listOf(16, 24)))
     }
 
     @Test
@@ -277,15 +269,6 @@ class UsbVolumeProtocolTest {
     }
 
     @Test
-    fun combinesReplayGainIntoEffectiveLinearGainSafely() {
-        assertEquals(0, effectiveVolumeGainQ16(0, 6000))
-        assertEquals(65536, effectiveVolumeGainQ16(65536, 6000))
-        assertTrue(abs(effectiveVolumeGainQ16(65536, -6021) - 32768) <= 2)
-        assertEquals(0, effectiveVolumeGainQ16(65536, Int.MIN_VALUE))
-        assertEquals(65536, effectiveVolumeGainQ16(1, Int.MAX_VALUE))
-    }
-
-    @Test
     fun reportsPcmBitPerfectOnlyWhenEffectiveDepthAndUsbSlotMatch() {
         assertTrue(pcmBitPerfect(24, 24, 24, digitalVolumeActive = false))
         assertTrue(pcmBitPerfect(16, 16, 16, digitalVolumeActive = false))
@@ -293,21 +276,6 @@ class UsbVolumeProtocolTest {
         assertFalse(pcmBitPerfect(16, 16, 24, digitalVolumeActive = false))
         assertFalse(pcmBitPerfect(null, 16, 16, digitalVolumeActive = false))
         assertFalse(pcmBitPerfect(24, 24, 24, digitalVolumeActive = true))
-    }
-
-    @Test
-    fun addsDsdCompensationOnlyToDsdHardwareVolume() {
-        assertTrue(
-            abs(effectiveHardwareVolumeGainQ16(32768, 0, 6, isDsd = true) - 65381) <= 2,
-        )
-        assertEquals(
-            32768,
-            effectiveHardwareVolumeGainQ16(32768, 0, 6, isDsd = false),
-        )
-        assertEquals(
-            0,
-            effectiveHardwareVolumeGainQ16(0, Int.MAX_VALUE, 6, isDsd = true),
-        )
     }
 
     @Test
@@ -387,16 +355,6 @@ class UsbVolumeProtocolTest {
     }
 
     @Test
-    fun waitsForIbassoSettleAndLatestPendingQuietWindow() {
-        val protocol = IbassoHidVolumeProtocol.id
-
-        assertEquals(100L, usbVolumePendingDelayMs(protocol, 1000L, null, 1050L))
-        assertEquals(200L, usbVolumePendingDelayMs(protocol, 1000L, 1100L, 1200L))
-        assertEquals(50L, usbVolumePendingDelayMs(protocol, 1000L, 1100L, 1350L))
-        assertEquals(0L, usbVolumePendingDelayMs(protocol, 1000L, 1100L, 1400L))
-    }
-
-    @Test
     fun skipsPendingDebounceOutsideAnActiveIbassoSequence() {
         assertEquals(0L, usbVolumePendingDelayMs(null, null, 1000L, 1100L))
         assertEquals(
@@ -416,196 +374,6 @@ class UsbVolumeProtocolTest {
         assertNull(usbVolumeProtocolForRequest("auto", null, true, true))
         assertNull(usbVolumeProtocolForRequest("auto", protocol, false, true))
         assertNull(usbVolumeProtocolForRequest("auto", protocol, true, false))
-    }
-
-    @Test
-    fun verifiesIbassoWriteBeforeChangingHardwareAuthority() {
-        assertEquals(
-            IbassoVolumeVerificationAction.ACCEPT_TARGET,
-            ibassoVolumeVerificationAction(100, 102, 100, 1, isDsd = false),
-        )
-        assertEquals(
-            IbassoVolumeVerificationAction.KEEP_PREVIOUS,
-            ibassoVolumeVerificationAction(100, 102, 102, 1, isDsd = false),
-        )
-        assertEquals(
-            IbassoVolumeVerificationAction.RETRY_READBACK,
-            ibassoVolumeVerificationAction(100, 102, null, 1, isDsd = false),
-        )
-        assertEquals(
-            IbassoVolumeVerificationAction.FREEZE_PCM,
-            ibassoVolumeVerificationAction(100, 102, null, 3, isDsd = false),
-        )
-        assertEquals(
-            IbassoVolumeVerificationAction.PAUSE_DSD,
-            ibassoVolumeVerificationAction(100, 102, null, 3, isDsd = true),
-        )
-    }
-
-    @Test
-    fun freezesDsdAtTheTrustedTargetOnlyWhenBothRegistersDoNotRise() {
-        assertEquals(
-            IbassoVolumeVerificationAction.FREEZE_DSD,
-            ibassoVolumeVerificationAction(
-                100, 102, null, 3,
-                isDsd = true,
-                targetDsdRaw = 98,
-                previousDsdRaw = 100,
-            ),
-        )
-        assertEquals(
-            IbassoVolumeVerificationAction.PAUSE_DSD,
-            ibassoVolumeVerificationAction(
-                104, 102, null, 3,
-                isDsd = true,
-                targetDsdRaw = 102,
-                previousDsdRaw = 100,
-            ),
-        )
-        assertEquals(
-            IbassoVolumeVerificationAction.PAUSE_DSD,
-            ibassoVolumeVerificationAction(
-                100, 102, null, 3,
-                isDsd = true,
-                targetDsdRaw = 102,
-                previousDsdRaw = 100,
-            ),
-        )
-        assertEquals(
-            IbassoVolumeVerificationAction.PAUSE_DSD,
-            ibassoVolumeVerificationAction(
-                100, null, null, 3,
-                isDsd = true,
-                targetDsdRaw = 98,
-                previousDsdRaw = null,
-            ),
-        )
-    }
-
-    @Test
-    fun yieldsVerificationToAPendingRequestInsteadOfFreezing() {
-        assertEquals(
-            IbassoVolumeVerificationAction.YIELD_TO_PENDING,
-            ibassoVolumeVerificationAction(
-                100, 102, null, 3,
-                isDsd = false,
-                hasPendingRequest = true,
-            ),
-        )
-        assertEquals(
-            IbassoVolumeVerificationAction.YIELD_TO_PENDING,
-            ibassoVolumeVerificationAction(
-                100, 102, null, 3,
-                isDsd = true,
-                hasPendingRequest = true,
-            ),
-        )
-        // 读回成功匹配时照常接受，不受挂起请求影响
-        assertEquals(
-            IbassoVolumeVerificationAction.ACCEPT_TARGET,
-            ibassoVolumeVerificationAction(
-                100, 102, 100, 3,
-                isDsd = false,
-                hasPendingRequest = true,
-            ),
-        )
-    }
-
-    @Test
-    fun waitsForPcmReaderRestartWithoutVerifyingOrFreezing() {
-        assertEquals(
-            IbassoReaderRecoveryAction.WAIT,
-            ibassoReaderRecoveryAction(
-                isDsd = false,
-                health = IbassoReaderHealth(restartRequested = true),
-                readerRunning = false,
-                generationMatches = true,
-                waitExpired = false,
-            ),
-        )
-    }
-
-    @Test
-    fun verifiesPcmAsSoonAsTheRestartedReaderIsReady() {
-        assertEquals(
-            IbassoReaderRecoveryAction.VERIFY_NOW,
-            ibassoReaderRecoveryAction(
-                isDsd = false,
-                health = IbassoReaderHealth().afterFailure().afterRestart(),
-                readerRunning = true,
-                generationMatches = true,
-                waitExpired = false,
-            ),
-        )
-    }
-
-    @Test
-    fun freezesPcmWhenReaderRecoveryExpiresOrBecomesWriteOnly() {
-        assertEquals(
-            IbassoReaderRecoveryAction.FREEZE_PCM,
-            ibassoReaderRecoveryAction(
-                isDsd = false,
-                health = IbassoReaderHealth(restartRequested = true),
-                readerRunning = false,
-                generationMatches = true,
-                waitExpired = true,
-            ),
-        )
-        assertEquals(
-            IbassoReaderRecoveryAction.FREEZE_PCM,
-            ibassoReaderRecoveryAction(
-                isDsd = false,
-                health = IbassoReaderHealth(writeOnly = true),
-                readerRunning = false,
-                generationMatches = true,
-                waitExpired = false,
-            ),
-        )
-    }
-
-    @Test
-    fun waitsForDsdReaderRestartThenVerifiesWithoutFreezingPcm() {
-        assertEquals(
-            IbassoReaderRecoveryAction.WAIT,
-            ibassoReaderRecoveryAction(
-                isDsd = true,
-                health = IbassoReaderHealth(restartRequested = true),
-                readerRunning = false,
-                generationMatches = true,
-                waitExpired = false,
-            ),
-        )
-        assertEquals(
-            IbassoReaderRecoveryAction.VERIFY_NOW,
-            ibassoReaderRecoveryAction(
-                isDsd = true,
-                health = IbassoReaderHealth().afterFailure().afterRestart(),
-                readerRunning = true,
-                generationMatches = true,
-                waitExpired = false,
-            ),
-        )
-        // 超时后 DSD 仍是 VERIFY_NOW（走严格验证结局），不得落到 FREEZE_PCM
-        assertEquals(
-            IbassoReaderRecoveryAction.VERIFY_NOW,
-            ibassoReaderRecoveryAction(
-                isDsd = true,
-                health = IbassoReaderHealth(restartRequested = true),
-                readerRunning = false,
-                generationMatches = true,
-                waitExpired = true,
-            ),
-        )
-        assertEquals(
-            IbassoReaderRecoveryAction.CANCEL,
-            ibassoReaderRecoveryAction(
-                isDsd = false,
-                health = IbassoReaderHealth(restartRequested = true),
-                readerRunning = false,
-                generationMatches = false,
-                waitExpired = false,
-            ),
-        )
     }
 
     @Test
@@ -636,153 +404,10 @@ class UsbVolumeProtocolTest {
     }
 
     @Test
-    fun mapsAppGainToIbassoRawTable() {
-        assertEquals(255, protocol.appGainToRaw(0, 0, 0).baseRaw)
-        assertEquals(97, protocol.appGainToRaw(gainQ16ForIndex(23), 0, 0).baseRaw)
-        assertEquals(10, protocol.appGainToRaw(gainQ16ForIndex(90), 0, 0).baseRaw)
-        assertEquals(0, protocol.appGainToRaw(65536, 0, 0).baseRaw)
-    }
-
-    @Test
-    fun keepsMuteAcrossDsdCompensation() {
-        assertEquals(UsbVolumeTarget(255, 255), protocol.appGainToRaw(0, 0, 6))
-        assertEquals(UsbVolumeTarget(255, 255), protocol.appGainToRaw(0, 0, -6))
-    }
-
-    @Test
-    fun appliesReplayGainBeforeClampAndDsdHalfDbSteps() {
-        assertEquals(
-            UsbVolumeTarget(0, 0),
-            protocol.appGainToRaw(gainQ16ForIndex(90), 6000, 0),
-        )
-        assertEquals(
-            UsbVolumeTarget(97, 85),
-            protocol.appGainToRaw(gainQ16ForIndex(23), 0, 6),
-        )
-        assertEquals(
-            UsbVolumeTarget(97, 109),
-            protocol.appGainToRaw(gainQ16ForIndex(23), 0, -6),
-        )
-        assertEquals(
-            UsbVolumeTarget(255, 255),
-            protocol.appGainToRaw(65536, Int.MIN_VALUE, 0),
-        )
-        assertEquals(
-            UsbVolumeTarget(0, 0),
-            protocol.appGainToRaw(65536, Int.MAX_VALUE, 0),
-        )
-    }
-
-    @Test
-    fun mapsRawTableValuesBackToLinearGain() {
-        assertEquals(0, protocol.rawToLinearGainQ16(255))
-        assertTrue(
-            abs(protocol.rawToLinearGainQ16(97) - gainQ16ForIndex(23)) <= 1,
-        )
-        assertTrue(
-            abs(protocol.rawToLinearGainQ16(10) - gainQ16ForIndex(90)) <= 1,
-        )
-        assertEquals(65536, protocol.rawToLinearGainQ16(0))
-    }
-
-    @Test
-    fun decodesEndpointPrefixedAndLegacyUnsolicitedVolumeEvents() {
-        val packet = ByteArray(32)
-        packet[4] = 0xfe.toByte()
-        packet[5] = 0x01
-        packet[8] = 97
-        packet[9] = 98
-        val legacy = ByteArray(16)
-        legacy[0] = 0xfe.toByte()
-        legacy[1] = 0x01
-        legacy[8] = 97
-        legacy[9] = 98
-
-        assertEquals(UsbVolumeEvent(97, 98), protocol.decodeEvent(packet))
-        assertEquals(UsbVolumeEvent(97, 98), protocol.decodeEvent(legacy))
-        assertNull(protocol.decodeEvent(packet.copyOf(9)))
-
-        val response = ByteArray(32)
-        response[6] = 65
-        response[8] = 97
-        assertNull(protocol.decodeEvent(response))
-    }
-
-    @Test
     fun recognizesOnlyMatchingStereoWriteConfirmation() {
         assertTrue(protocol.isWriteConfirmation(UsbVolumeEvent(97, 97), 97))
         assertFalse(protocol.isWriteConfirmation(UsbVolumeEvent(97, 98), 97))
         assertFalse(protocol.isWriteConfirmation(UsbVolumeEvent(97, 97), null))
-    }
-
-    @Test
-    fun routesUnsolicitedEventsBeforeCommandResponses() {
-        val packet = ibassoEventPacket(leftRaw = 97, rightRaw = 97).also {
-            it[6] = 65
-        }
-
-        val route = routeIbassoVolumePacket(packet, setOf(65), lastWrittenRaw = 97)
-
-        assertTrue(route is IbassoVolumePacketRoute.Event)
-        route as IbassoVolumePacketRoute.Event
-        assertEquals(UsbVolumeEvent(97, 97), route.event)
-        assertTrue(route.isWriteConfirmation)
-    }
-
-    @Test
-    fun routesCommandResponsesAndKeepsTheirCommandId() {
-        val matchingPacket = ibassoResponsePacket(65)
-        val matching = routeIbassoVolumePacket(matchingPacket, setOf(65), null)
-        val wrongCommand = routeIbassoVolumePacket(ibassoResponsePacket(64), setOf(65), null)
-
-        assertTrue(matching is IbassoVolumePacketRoute.CommandResponse)
-        matching as IbassoVolumePacketRoute.CommandResponse
-        assertEquals(65, matching.command)
-        assertSame(matchingPacket, matching.packet)
-        assertTrue(wrongCommand is IbassoVolumePacketRoute.CommandResponse)
-        wrongCommand as IbassoVolumePacketRoute.CommandResponse
-        assertEquals(64, wrongCommand.command)
-    }
-
-    @Test
-    fun routesLateValidCommandResponsesWithoutReportingUnknownPackets() {
-        val packet = ibassoResponsePacket(command = 0, value = 120)
-
-        val route = routeIbassoVolumePacket(packet, emptySet(), null)
-
-        assertTrue(route is IbassoVolumePacketRoute.CommandResponse)
-        route as IbassoVolumePacketRoute.CommandResponse
-        assertEquals(0, route.command)
-        assertSame(packet, route.packet)
-    }
-
-    @Test
-    fun doesNotMistakeOrdinaryResponsesForEvents() {
-        val route = routeIbassoVolumePacket(ibassoResponsePacket(19), setOf(19), null)
-
-        assertTrue(route is IbassoVolumePacketRoute.CommandResponse)
-        assertFalse(route is IbassoVolumePacketRoute.Event)
-    }
-
-    @Test
-    fun classifiesStereoEventsAndUnknownPackets() {
-        val confirmation = routeIbassoVolumePacket(
-            ibassoEventPacket(leftRaw = 97, rightRaw = 97),
-            emptySet(),
-            lastWrittenRaw = 97,
-        )
-        val changed = routeIbassoVolumePacket(
-            ibassoEventPacket(leftRaw = 97, rightRaw = 98),
-            emptySet(),
-            lastWrittenRaw = 97,
-        )
-
-        assertTrue((confirmation as IbassoVolumePacketRoute.Event).isWriteConfirmation)
-        assertFalse((changed as IbassoVolumePacketRoute.Event).isWriteConfirmation)
-        assertEquals(
-            IbassoVolumePacketRoute.Unknown,
-            routeIbassoVolumePacket(byteArrayOf(0x01), emptySet(), null),
-        )
     }
 
     @Test
@@ -988,14 +613,6 @@ class UsbVolumeProtocolTest {
     }
 
     @Test
-    fun unsolicitedIbassoEventBecomesTrustedTarget() {
-        assertEquals(
-            UsbVolumeTarget(baseRaw = 97, dsdRaw = 85),
-            ibassoTargetFromEvent(baseRaw = 97, dsdCompensationDb = 6),
-        )
-    }
-
-    @Test
     fun selectsDirectSetReportForRollbackWhenReaderIsUnavailable() {
         assertTrue(
             shouldUseDirectIbassoSetReport(
@@ -1070,47 +687,10 @@ class UsbVolumeProtocolTest {
     fun selectsOnlyTrustedIbassoRollbackTargets() {
         val lastApplied = UsbVolumeTarget(baseRaw = 97, dsdRaw = 85)
 
+        // 由 initialBaseRaw 推导回滚目标的数值用例（含 DSD 补偿换算）已移至
+        // native 对拍测试；此处只保留不触发 native 的空值/优先级分支
         assertEquals(lastApplied, ibassoRollbackTarget(lastApplied, 109, 6))
-        assertEquals(UsbVolumeTarget(109, 97), ibassoRollbackTarget(null, 109, 6))
         assertNull(ibassoRollbackTarget(null, null, 6))
-    }
-
-    @Test
-    fun buildsCompleteIbassoTargetAndRollbackPacketGroups() {
-        val targetPackets = ibassoVolumePackets(UsbVolumeTarget(97, 85))
-        val rollbackTarget = ibassoRollbackTarget(null, 109, 6)!!
-        val rollbackPackets = ibassoVolumePackets(rollbackTarget)
-        val commands = listOf(1, 2, 3, 4, 9, 10, 19, 11, 12, 20)
-
-        assertEquals(10, targetPackets.size)
-        assertEquals(commands, targetPackets.map { it[0].toInt() and 0xff })
-        assertEquals(
-            listOf(97, 97, 97, 97, 85, 85, 97, 85, 85, 97),
-            targetPackets.map { packet ->
-                val command = packet[0].toInt() and 0xff
-                packet[if (command == 19 || command == 20) 7 else 11].toInt() and 0xff
-            },
-        )
-        assertEquals(10, rollbackPackets.size)
-        assertEquals(commands, rollbackPackets.map { it[0].toInt() and 0xff })
-        assertEquals(
-            listOf(109, 109, 109, 109, 97, 97, 109, 97, 97, 109),
-            rollbackPackets.map { packet ->
-                val command = packet[0].toInt() and 0xff
-                packet[if (command == 19 || command == 20) 7 else 11].toInt() and 0xff
-            },
-        )
-    }
-
-    @Test
-    fun mapsIbassoBaseRawToCurrentPcmOrDsdGain() {
-        val pcm = ibassoActualEventGainQ16(97, isDsd = false, dsdCompensationDb = 6)
-        val dsd = ibassoActualEventGainQ16(97, isDsd = true, dsdCompensationDb = 6)
-
-        assertEquals(97, pcm.raw)
-        assertEquals(IbassoHidVolumeProtocol.rawToLinearGainQ16(97), pcm.gainQ16)
-        assertEquals(85, dsd.raw)
-        assertEquals(IbassoHidVolumeProtocol.rawToLinearGainQ16(85), dsd.gainQ16)
     }
 
     @Test
@@ -1130,22 +710,4 @@ class UsbVolumeProtocolTest {
         debouncer.clear()
         assertNull(debouncer.consume(staleToken))
     }
-
-    private fun ibassoEventPacket(leftRaw: Int, rightRaw: Int): ByteArray =
-        ByteArray(32).also {
-            it[4] = 0xfe.toByte()
-            it[5] = 0x01
-            it[8] = leftRaw.toByte()
-            it[9] = rightRaw.toByte()
-        }
-
-    private fun ibassoResponsePacket(command: Int, value: Int = 0): ByteArray =
-        ByteArray(32).also {
-            it[6] = command.toByte()
-            it[7] = 1
-            it[8] = value.toByte()
-        }
-
-    private fun gainQ16ForIndex(index: Int): Int =
-        ((index / 100.0).pow(1.5) * 65536).roundToInt()
 }
