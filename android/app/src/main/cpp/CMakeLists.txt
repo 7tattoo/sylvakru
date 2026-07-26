@@ -76,6 +76,15 @@ add_library(
 )
 target_include_directories(sylvakru_usb_uac PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+# DAC quirk 键匹配与位完美混音采样率选择：从 UsbDacQuirks/UsbPreferredMixer
+# 下沉的平台无关纯逻辑（quirk JSON 装载仍在 Kotlin）
+add_library(
+    sylvakru_usb_dac_quirks
+    STATIC
+    usb_dac_quirks.cpp
+)
+target_include_directories(sylvakru_usb_dac_quirks PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 if(ANDROID)
     add_library(
         sylvakru_usb_exclusive
@@ -125,4 +134,8 @@ if(SYLVAKRU_BUILD_HOST_TESTS)
     # UAC 描述符测试：手工构造 UAC1/UAC2 描述符片段对拍
     add_executable(usb_uac_test tests/usb_uac_test.cpp)
     target_link_libraries(usb_uac_test PRIVATE sylvakru_usb_uac)
+
+    # quirk 键匹配/采样率选择测试：对拍 Kotlin 匹配用例
+    add_executable(usb_dac_quirks_test tests/usb_dac_quirks_test.cpp)
+    target_link_libraries(usb_dac_quirks_test PRIVATE sylvakru_usb_dac_quirks)
 endif()
