@@ -29,6 +29,25 @@ class ViewEntry extends StatefulWidget {
 class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
   bool systemCanPop = false;
   Timer? _exitTimer;
+  SystemUiMode? _appliedUiMode;
+
+  // 系统 UI 模式只在目标变化时应用，不能放在 build 里每次重设：全面屏手势
+  // 上滑时系统临时显示系统栏 → insets 变化触发重建 → 立刻又把栏藏回去，
+  // 返回桌面的手势被中断（平板宽屏沉浸模式下上滑卡住回不了桌面）。
+  void _applySystemUiMode(SystemUiMode mode) {
+    if (_appliedUiMode == mode) {
+      return;
+    }
+    _appliedUiMode = mode;
+    if (mode == SystemUiMode.manual) {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: [SystemUiOverlay.top],
+      );
+    } else {
+      SystemChrome.setEnabledSystemUIMode(mode);
+    }
+  }
 
   @override
   void initState() {
@@ -81,6 +100,12 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
     if (Platform.isAndroid && state == AppLifecycleState.resumed) {
       systemCanPop = false;
       _exitTimer?.cancel();
+      // 回到前台系统可能已恢复系统栏，重新应用一次当前 UI 模式
+      final uiMode = _appliedUiMode;
+      if (uiMode != null) {
+        _appliedUiMode = null;
+        _applySystemUiMode(uiMode);
+      }
       // rebuild PopScope to allow it to handle pop
       setState(() {});
     }
@@ -135,13 +160,12 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
           return BigPictureView();
         }
         if (isTooNarrow(context)) {
-          SystemChrome.setEnabledSystemUIMode(
-            SystemUiMode.manual,
-            overlays: [SystemUiOverlay.top],
-          );
+          _applySystemUiMode(SystemUiMode.manual);
           return PortraitView();
         }
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+        // immersiveSticky：上滑临时显示的系统栏是透明浮层、不派发 insets
+        // 变化也会自动隐藏，全面屏手势可正常完成；immersive 会常驻显示
+        _applySystemUiMode(SystemUiMode.immersiveSticky);
         return LandscapeView();
       },
     );
