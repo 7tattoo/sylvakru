@@ -116,6 +116,7 @@ if(ANDROID)
         usb_uac_jni.cpp
         usb_dac_quirks_jni.cpp
         usb_volume_protocol_jni.cpp
+        usb_pcm_packetizer_jni.cpp
     )
 
     find_library(log-lib log)
@@ -128,6 +129,7 @@ if(ANDROID)
         sylvakru_usb_uac
         sylvakru_usb_dac_quirks
         sylvakru_usb_volume_protocol
+        sylvakru_usb_pcm_packetizer
         ${log-lib}
     )
 endif()

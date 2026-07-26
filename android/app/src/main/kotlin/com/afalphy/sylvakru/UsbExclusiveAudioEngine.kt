@@ -119,6 +119,43 @@ object UsbExclusiveNative {
     private external fun nativeClose(handle: Long)
 }
 
+/**
+ * usb_pcm_packetizer.cpp 的 JNI 入口：PcmIsoPacketizer 的纯计算核心
+ * （槽位/位深转换、数字音量、淡入淡出、反馈包长状态机）。句柄由
+ * PcmIsoPacketizer 独占持有；对拍测试见 cpp/tests/usb_pcm_packetizer_test.cpp。
+ */
+internal object UsbPcmNative {
+    init {
+        System.loadLibrary("sylvakru_usb_exclusive")
+    }
+
+    external fun create(
+        sampleRate: Int,
+        packetsPerSecond: Int,
+        channels: Int,
+        inputBytesPerSample: Int,
+        inputBitDepth: Int,
+        usbBytesPerSample: Int,
+        usbBitResolution: Int,
+        feedbackOutputPacketDivisor: Int,
+    ): Long
+
+    /** 返回 null 表示满刻度直通且无淡入，调用方沿用原缓冲。 */
+    external fun process(handle: Long, data: ByteArray, gainQ16: Int): ByteArray?
+
+    external fun beginFadeIn(handle: Long, totalFrames: Int)
+
+    /** 返回空数组表示尚无已捕获帧，调用方改写整段静音。 */
+    external fun transitionTail(handle: Long, fadeFrames: Int, silenceFrames: Int): ByteArray
+
+    /** 返回 [包字节数, 实际反馈Q16, 名义Q16, 状态]；状态 0=无反馈 1=接受 2=拒绝。 */
+    external fun nextPacketBytes(handle: Long, feedbackQ16: Int): IntArray
+
+    external fun reset(handle: Long)
+
+    external fun destroy(handle: Long)
+}
+
 private const val NATIVE_USB_EXCLUSIVE_STREAMING_ENABLED = true
 private const val NATIVE_USB_EXCLUSIVE_DISABLED_MESSAGE =
     "真独占 USB 流式输出暂未启用，已回退到系统 USB 输出。"
@@ -3336,6 +3373,7 @@ class UsbExclusiveAudioEngine(
             // 打包器已 JNI 化持有 native 句柄，会话硬关闭时统一释放
             sessionDsd?.close()
             sessionDsd = null
+            sessionPacketizer?.close()
             sessionPacketizer = null
             sessionDsdKind = null
             sessionNativeFormat = null
@@ -3818,6 +3856,9 @@ class UsbExclusiveAudioEngine(
             codec?.release()
             extractor.release()
             runCatching { dataSource?.close() }
+            // 局部打包器随 worker 结束释放 native 句柄（幂等，二者可能同对象）
+            packetizer?.close()
+            lastPacketizerWithAudio?.close()
             if (sessionBroken) {
                 hardCloseSession("decode worker failed")
             } else {
@@ -4055,6 +4096,9 @@ class UsbExclusiveAudioEngine(
             emitError(error.message ?: "USB exclusive playback failed.")
         } finally {
             decoder.close()
+            // 局部打包器随 worker 结束释放 native 句柄（幂等，二者可能同对象）
+            packetizer?.close()
+            lastPacketizerWithAudio?.close()
             if (sessionBroken) {
                 hardCloseSession("decode worker failed")
             } else {
@@ -4505,6 +4549,8 @@ class UsbExclusiveAudioEngine(
                 "partExists=${file.exists()}, lastPos=${streamTargetMs}ms",
         )
         finishPcmPacketizer(packetizer)
+        // 局部打包器随 worker 结束释放 native 句柄
+        packetizer.close()
         if (!stopped.get()) {
             workerEndedAtEof = true
             updateState(inactiveState("USB exclusive playback completed."))
@@ -5820,27 +5866,37 @@ class UsbExclusiveAudioEngine(
         private val transferPacketLengths = IntArray(16)
         private val bytesPerFrame = channels * usbBytesPerSample
         private val inputBytesPerFrame = channels * inputBytesPerSample
-        private var sampleRemainder = 0
-        private var feedbackRemainderQ16 = 0L
         private var transferPacketCount = 0
         private var packetLogCount = 0
         private var feedbackRejectLogCount = 0
         private var pcmPreviewLogged = false
         private var pcmPreviewAttempts = 0
-        private val lastUsbSamples = IntArray(channels)
-        private var hasLastUsbFrame = false
-        private var fadeInTotalFrames = 0
-        private var fadeInFramesDone = 0
+
+        // 纯计算核心（转换/增益/淡入/尾部淡出/包长余数状态机）在 native 侧，
+        // 见 usb_pcm_packetizer.cpp；本类保留缓冲/批量/日志/回调编排。
+        private var coreHandle = UsbPcmNative.create(
+            sampleRate,
+            packetsPerSecond,
+            channels,
+            inputBytesPerSample,
+            inputBitDepth,
+            usbBytesPerSample,
+            usbBitResolution,
+            feedbackOutputPacketDivisor,
+        )
 
         // 暂停恢复时对续播数据做短淡入；seek 的 reset() 不清计数，
         // 暂停中 seek 再恢复同样有淡入护住拼接点。
         fun beginFadeIn(durationMs: Int) {
-            fadeInTotalFrames = usbSilenceFrames(sampleRate, durationMs)
-            fadeInFramesDone = 0
+            check(coreHandle != 0L) { "PcmIsoPacketizer 已关闭" }
+            UsbPcmNative.beginFadeIn(coreHandle, usbSilenceFrames(sampleRate, durationMs))
         }
 
         fun write(data: ByteArray) {
-            val converted = applyFadeInIfNeeded(convertPcmToUsbSlots(data))
+            check(coreHandle != 0L) { "PcmIsoPacketizer 已关闭" }
+            // null = 满刻度直通，沿用原缓冲（含不足一帧的尾巴，与原就地实现一致）
+            val gainQ16 = volumeGainQ16?.invoke() ?: UNITY_GAIN_Q16
+            val converted = UsbPcmNative.process(coreHandle, data, gainQ16) ?: data
             if (!pcmPreviewLogged) {
                 pcmPreviewAttempts++
                 val forcePreview = pcmPreviewAttempts >= 64
@@ -5862,16 +5918,14 @@ class UsbExclusiveAudioEngine(
         }
 
         fun writeTransitionTail(fadeMs: Int, silenceMs: Int) {
+            check(coreHandle != 0L) { "PcmIsoPacketizer 已关闭" }
             val fadeFrames = usbSilenceFrames(sampleRate, fadeMs)
             val silenceFrames = usbSilenceFrames(sampleRate, silenceMs)
-            if (!hasLastUsbFrame) {
+            // 空数组 = 尚无已捕获帧：整段写静音
+            val bytes = UsbPcmNative.transitionTail(coreHandle, fadeFrames, silenceFrames)
+            if (bytes.isEmpty()) {
                 writeUsbSilence(fadeFrames + silenceFrames)
                 return
-            }
-            val samples = pcmFadeToSilence(lastUsbSamples, fadeFrames, silenceFrames)
-            val bytes = ByteArray(samples.size * usbBytesPerSample)
-            samples.forEachIndexed { index, sample ->
-                writeLittleEndian(bytes, index * usbBytesPerSample, usbBytesPerSample, sample)
             }
             pending.write(bytes)
             drain(fullPacketsOnly = false)
@@ -5886,14 +5940,20 @@ class UsbExclusiveAudioEngine(
             pending.reset()
             transfer.reset()
             transferPacketCount = 0
-            sampleRemainder = 0
-            feedbackRemainderQ16 = 0L
             packetLogCount = 0
             feedbackRejectLogCount = 0
             pcmPreviewLogged = false
             pcmPreviewAttempts = 0
-            lastUsbSamples.fill(0)
-            hasLastUsbFrame = false
+            // native 侧清包长余数与最后一帧（不清淡入计数）
+            check(coreHandle != 0L) { "PcmIsoPacketizer 已关闭" }
+            UsbPcmNative.reset(coreHandle)
+        }
+
+        fun close() {
+            if (coreHandle != 0L) {
+                UsbPcmNative.destroy(coreHandle)
+                coreHandle = 0L
+            }
         }
 
         private fun drain(fullPacketsOnly: Boolean) {
@@ -5945,117 +6005,29 @@ class UsbExclusiveAudioEngine(
 
         private fun nextPacketBytes(): Int {
             val feedbackQ16 = feedbackFramesPerPacketQ16?.invoke() ?: 0
-            if (feedbackQ16 > 0) {
-                val outputFeedbackQ16 = feedbackQ16 / feedbackOutputPacketDivisor
-                val nominalFramesQ16 = ((sampleRate.toLong() shl 16) / packetsPerSecond).toInt()
-                val minFeedbackQ16 = nominalFramesQ16 - (nominalFramesQ16 / 8)
-                val maxFeedbackQ16 = nominalFramesQ16 + (nominalFramesQ16 / 2)
-                if (outputFeedbackQ16 in minFeedbackQ16..maxFeedbackQ16) {
-                    reportFeedback?.invoke(outputFeedbackQ16, nominalFramesQ16, false)
-                    feedbackRemainderQ16 += outputFeedbackQ16.toLong()
-                    val frames = (feedbackRemainderQ16 ushr 16).toInt()
-                    feedbackRemainderQ16 = feedbackRemainderQ16 and 0xffff
-                    if (frames > 0) {
-                        return maxOf(bytesPerFrame, frames * bytesPerFrame)
-                    }
-                } else {
-                    reportFeedback?.invoke(outputFeedbackQ16, nominalFramesQ16, true)
+            // native 返回 [包字节数, 实际反馈Q16, 名义Q16, 状态]，
+            // 余数状态机在 native 侧；日志与回调留在这里保持逐字符一致
+            val parsed = UsbPcmNative.nextPacketBytes(coreHandle, feedbackQ16)
+            when (parsed[3]) {
+                1 -> reportFeedback?.invoke(parsed[1], parsed[2], false)
+                2 -> {
+                    reportFeedback?.invoke(parsed[1], parsed[2], true)
                     if (feedbackRejectLogCount < 8) {
                         ++feedbackRejectLogCount
                         UsbDiagnostics.w(
                             "UsbExclusiveAudioEngine",
-                            "USB feedback ignored outputFrames=${q16ToFrames(outputFeedbackQ16)}, " +
-                                "nominalFrames=${q16ToFrames(nominalFramesQ16)}, " +
+                            "USB feedback ignored outputFrames=${q16ToFrames(parsed[1])}, " +
+                                "nominalFrames=${q16ToFrames(parsed[2])}, " +
                                 "sampleRate=$sampleRate, packetsPerSecond=$packetsPerSecond",
                         )
                     }
                 }
             }
-
-            sampleRemainder += sampleRate
-            val frames = sampleRemainder / packetsPerSecond
-            sampleRemainder %= packetsPerSecond
-            return maxOf(bytesPerFrame, frames * bytesPerFrame)
+            return parsed[0]
         }
 
         private fun q16ToFrames(value: Int): String =
             String.format(Locale.US, "%.6f", value.toDouble() / 65536.0)
-
-        // 在 USB slot 域就地施加逐帧淡入；data 是解码侧的临时拷贝，可直接改。
-        private fun applyFadeInIfNeeded(data: ByteArray): ByteArray {
-            if (fadeInTotalFrames == 0 || fadeInFramesDone >= fadeInTotalFrames) {
-                return data
-            }
-            val frames = data.size / bytesPerFrame
-            var offset = 0
-            var frame = 0
-            while (frame < frames && fadeInFramesDone < fadeInTotalFrames) {
-                val gainQ16 = pcmFadeInGainQ16(fadeInFramesDone, fadeInTotalFrames)
-                repeat(channels) {
-                    val sample = readSignedLittleEndian(
-                        data,
-                        offset,
-                        usbBytesPerSample,
-                        usbBitResolution,
-                    )
-                    val faded = ((sample.toLong() * gainQ16) shr 16).toInt()
-                    writeLittleEndian(data, offset, usbBytesPerSample, faded)
-                    offset += usbBytesPerSample
-                }
-                fadeInFramesDone++
-                frame++
-            }
-            return data
-        }
-
-        private fun convertPcmToUsbSlots(data: ByteArray): ByteArray {
-            val gainQ16 = volumeGainQ16?.invoke() ?: UNITY_GAIN_Q16
-            val applyGain = gainQ16 < UNITY_GAIN_Q16
-            val frames = data.size / inputBytesPerFrame
-            if (frames > 0) {
-                var inputOffset = (frames - 1) * inputBytesPerFrame
-                repeat(channels) { channel ->
-                    val sample = readSignedLittleEndian(
-                        data,
-                        inputOffset,
-                        inputBytesPerSample,
-                        inputBitDepth,
-                    )
-                    lastUsbSamples[channel] = pcmSampleForUsbTransition(
-                        sample,
-                        inputBitDepth,
-                        usbBitResolution,
-                        gainQ16,
-                    )
-                    inputOffset += inputBytesPerSample
-                }
-                hasLastUsbFrame = true
-            }
-            // 满刻度且无需重排位深时零拷贝直通，保持位完美。
-            if (!applyGain && inputBytesPerSample == usbBytesPerSample && inputBitDepth == usbBitResolution) {
-                return data
-            }
-
-            val output = ByteArray(frames * bytesPerFrame)
-            var inputOffset = 0
-            var outputOffset = 0
-            repeat(frames) {
-                repeat(inputBytesPerFrame / inputBytesPerSample) {
-                    val sample = readSignedLittleEndian(data, inputOffset, inputBytesPerSample, inputBitDepth)
-                    // 在源位深域施加线性增益（Long 防溢出）再做 slot 对齐移位。
-                    val shifted = pcmSampleForUsbTransition(
-                        sample,
-                        inputBitDepth,
-                        usbBitResolution,
-                        gainQ16,
-                    )
-                    writeLittleEndian(output, outputOffset, usbBytesPerSample, shifted)
-                    inputOffset += inputBytesPerSample
-                    outputOffset += usbBytesPerSample
-                }
-            }
-            return output
-        }
 
         private fun hasAudibleSamples(input: ByteArray): Boolean {
             val frames = input.size / inputBytesPerFrame
@@ -6118,15 +6090,5 @@ class UsbExclusiveAudioEngine(
             return (value shl shift) shr shift
         }
 
-        private fun writeLittleEndian(
-            data: ByteArray,
-            offset: Int,
-            bytes: Int,
-            value: Int,
-        ) {
-            for (index in 0 until bytes) {
-                data[offset + index] = ((value ushr (index * 8)) and 0xff).toByte()
-            }
-        }
     }
 }

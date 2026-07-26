@@ -69,6 +69,10 @@ void fadeToSilenceRampsLastFrame() {
     // fadeFrames=1 时分母钳位为 1、分子为 0：单帧直接归零
     const auto single = sylvakru::pcmFadeToSilence({4096}, 1, 0);
     assert(single.size() == 1 && single[0] == 0);
+    // 32 位满幅样本乘分子须走 64 位不溢出（Kotlin Long 语义）
+    const auto wide = sylvakru::pcmFadeToSilence({INT32_MAX, -INT32_MAX}, 9, 1);
+    assert(wide.front() == INT32_MAX && wide[1] == -INT32_MAX);
+    assert(wide[wide.size() - 1] == 0 && wide[wide.size() - 2] == 0);
 }
 
 // ---- process：直通/转换/增益/淡入 ----
