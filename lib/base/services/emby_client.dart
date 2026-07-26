@@ -213,7 +213,38 @@ class EmbyClient {
     required String itemId,
     required String savePath,
     CancelToken? cancelToken,
+    int resumeFrom = 0,
   }) async {
+    // 断点续传：从已下载长度带 Range 追加写入；只放行 206，服务器忽略
+    // Range 返 200 时在写文件前就报错，避免整段内容被追加损坏文件
+    if (resumeFrom > 0) {
+      try {
+        await dio.download(
+          '/Items/$itemId/Download',
+          savePath,
+          queryParameters: {'api_key': accessToken},
+          cancelToken: cancelToken,
+          deleteOnError: false,
+          fileAccessMode: FileAccessMode.append,
+          options: Options(
+            receiveTimeout: const Duration(seconds: 15),
+            headers: {'range': 'bytes=$resumeFrom-'},
+            validateStatus: (status) => status == 206,
+          ),
+        );
+        return true;
+      } on DioException catch (e) {
+        if (e.type != DioExceptionType.badResponse) {
+          logger.output(
+            '[Emby] Resume download error: ${e.message} '
+            '(${e.response?.statusCode})',
+          );
+          // 网络类失败：保留已下载部分，等上层重试继续续传
+          return false;
+        }
+        // 服务器不支持 Range：退回整文件重下
+      }
+    }
     return _boolRequest(
       () => dio.download(
         '/Items/$itemId/Download',

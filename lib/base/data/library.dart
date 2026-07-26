@@ -460,28 +460,37 @@ class Library {
       await stale.delete();
     }
     while (!cancelToken.isCancelled) {
+      // 重试时从 .part 已有长度断点续传，不从头重下：正在流式独占读这个
+      // .part 的引擎不必等重新下载追回播放位置，已下载流量也不浪费
+      final resumeFrom = (await File(partPath).exists())
+          ? await File(partPath).length()
+          : 0;
       final completed = switch (song.sourceType) {
         .webdav => await webdavClient!.download(
           remotePath: song.path!,
           localPath: partPath,
           cancelToken: cancelToken,
+          resumeFrom: resumeFrom,
         ),
         .subsonic => await _downloadOpenSubsonic(
           subsonicClient!,
           song.id,
           partPath,
           cancelToken,
+          resumeFrom,
         ),
         .navidrome => await _downloadOpenSubsonic(
           navidromeClient!,
           song.id,
           partPath,
           cancelToken,
+          resumeFrom,
         ),
         .emby => await embyClient!.downloadSong(
           itemId: song.id,
           savePath: partPath,
           cancelToken: cancelToken,
+          resumeFrom: resumeFrom,
         ),
         .local => false,
       };
@@ -540,11 +549,13 @@ class Library {
     String songId,
     String savePath,
     CancelToken cancelToken,
+    int resumeFrom,
   ) async {
     return client.downloadSong(
       songId: songId,
       savePath: savePath,
       cancelToken: cancelToken,
+      resumeFrom: resumeFrom,
     );
   }
 

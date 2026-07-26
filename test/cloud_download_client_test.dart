@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -372,7 +373,85 @@ void main() {
 
       await library_data.Library().tryAddCache(song);
 
+      // 断线重试先带 Range 续传，该服务器不支持（返 200 被拒），
+      // 再整文件重下：共 3 次请求
+      expect(requestCount, 3);
+      expect(song.cacheExist, isTrue);
+      expect(await File(song.cachePath!).readAsBytes(), [1, 2, 3]);
+    },
+  );
+
+  test(
+    'cloud cache resumes a dropped download from the part file offset',
+    () async {
+      final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close());
+      var requestCount = 0;
+      final rangeRequests = <String?>[];
+
+      server.listen((socket) {
+        requestCount++;
+        final current = requestCount;
+        final buffer = BytesBuilder();
+        late StreamSubscription<Uint8List> subscription;
+        subscription = socket.listen((data) async {
+          buffer.add(data);
+          final head = ascii.decode(buffer.toBytes(), allowInvalid: true);
+          if (!head.contains('\r\n\r\n')) return;
+          await subscription.cancel();
+          final range = RegExp(
+            r'range: bytes=(\d+)-',
+            caseSensitive: false,
+          ).firstMatch(head)?.group(1);
+          rangeRequests.add(range);
+          if (current == 1) {
+            // 首次请求只送出 3 字节中的 1 字节就断线
+            socket.add(
+              ascii.encode(
+                    'HTTP/1.1 200 OK\r\n'
+                    'Content-Length: 3\r\n'
+                    'Connection: close\r\n'
+                    '\r\n',
+                  ) +
+                  [1],
+            );
+            await socket.flush();
+            socket.destroy();
+          } else {
+            // 重试带 Range：按断点返 206 续传剩余字节
+            final from = int.parse(range!);
+            final rest = [1, 2, 3].sublist(from);
+            socket.add(
+              ascii.encode(
+                    'HTTP/1.1 206 Partial Content\r\n'
+                    'Content-Length: ${rest.length}\r\n'
+                    'Content-Range: bytes $from-2/3\r\n'
+                    'Connection: close\r\n'
+                    '\r\n',
+                  ) +
+                  rest,
+            );
+            await socket.flush();
+            await socket.close();
+          }
+        });
+      });
+
+      navidromeClient = NavidromeClient(
+        baseUrl: 'http://${server.address.address}:${server.port}',
+        username: 'user',
+        password: 'password',
+      );
+      final song = MyAudioMetadata.fromOpenSonicMap({
+        'id': 'resume-song-id',
+        'title': 'Resume Song',
+        'suffix': 'flac',
+      }, app.SourceType.navidrome);
+
+      await library_data.Library().tryAddCache(song);
+
       expect(requestCount, 2);
+      expect(rangeRequests, [null, '1']);
       expect(song.cacheExist, isTrue);
       expect(await File(song.cachePath!).readAsBytes(), [1, 2, 3]);
     },

@@ -165,12 +165,14 @@ class SubsonicClient extends OpenSubsonicClient {
     required String savePath,
     ProgressCallback? onProgress,
     CancelToken? cancelToken,
+    int resumeFrom = 0,
   }) async {
     return super.downloadSong(
       songId: convertToServerId(songId),
       savePath: savePath,
       onProgress: onProgress,
       cancelToken: cancelToken,
+      resumeFrom: resumeFrom,
     );
   }
 }

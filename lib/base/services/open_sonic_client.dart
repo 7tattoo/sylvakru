@@ -351,11 +351,36 @@ abstract class OpenSubsonicClient {
     required String savePath,
     ProgressCallback? onProgress,
     CancelToken? cancelToken,
+    int resumeFrom = 0,
   }) async {
     try {
       final uri = Uri.parse(baseUrl)
           .resolve('/rest/download.view')
           .replace(queryParameters: params({'id': songId}));
+
+      // 断点续传：从已下载长度带 Range 追加写入；只放行 206，服务器忽略
+      // Range 返 200 时在写文件前就报错，避免整段内容被追加损坏文件
+      if (resumeFrom > 0) {
+        try {
+          await _dio.download(
+            uri.toString(),
+            savePath,
+            onReceiveProgress: onProgress,
+            cancelToken: cancelToken,
+            deleteOnError: false,
+            fileAccessMode: FileAccessMode.append,
+            options: Options(
+              receiveTimeout: const Duration(seconds: 15),
+              headers: {'range': 'bytes=$resumeFrom-'},
+              validateStatus: (status) => status == 206,
+            ),
+          );
+          return true;
+        } on DioException catch (e) {
+          if (e.type != DioExceptionType.badResponse) rethrow;
+          // 服务器不支持 Range：退回整文件重下
+        }
+      }
 
       await _dio.download(
         uri.toString(),
