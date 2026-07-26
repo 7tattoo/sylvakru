@@ -121,103 +121,147 @@ extension _SongListPage on _SongListState {
               );
             },
           ),
-          if (!isRanking && !isRecently)
+          if (playlist != null)
             ListTile(
-              leading: ImageIcon(sequenceImage),
+              leading: ValueListenableBuilder(
+                valueListenable: playlistManager.useAlbumStructureNotifier,
+                builder: (context, value, child) {
+                  return ImageIcon(value ? albumImage : listImage);
+                },
+              ),
               title: Text(
-                l10n.sortSongs,
+                l10n.view,
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               visualDensity: const VisualDensity(horizontal: 0, vertical: -4),
-              onTap: () {
-                Navigator.pop(context);
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  useRootNavigator: true,
-                  builder: (context) {
-                    List<String> orderText = [
-                      l10n.defaultText,
-                      l10n.titleAscending,
-                      l10n.titleDescending,
-                      l10n.artistAscending,
-                      l10n.artistDescending,
-                      l10n.albumAscending,
-                      l10n.albumDescending,
-                      l10n.durationAscending,
-                      l10n.durationDescending,
-                    ];
-                    if (isLibrary &&
-                            (sourceType == .local || sourceType == .webdav) ||
-                        folder != null) {
-                      orderText.add(l10n.modifiedTimeAscending);
-                      orderText.add(l10n.modifiedTimedescending);
-                      orderText.add(l10n.randomizeTemp);
-                      orderText.add(l10n.randomizePermanent);
-                    }
-                    List<Widget> orderWidget = [];
-                    for (int i = 0; i < orderText.length; i++) {
-                      String text = orderText[i];
-                      orderWidget.add(
-                        ValueListenableBuilder(
-                          valueListenable: sortTypeNotifier,
-                          builder: (context, value, child) {
-                            return ListTile(
-                              title: Text(text),
-                              onTap: () async {
-                                if (i == 12) {
-                                  if (!await showConfirmDialog(
-                                    context,
-                                    l10n.cannotBeUndone,
-                                  )) {
-                                    return;
-                                  }
-                                  sortTypeNotifier.value = 0;
-                                  if (isLibrary) {
-                                    library.shuffle(sourceType);
+              trailing: SizedBox(
+                width: 100,
+                child: Row(
+                  children: [
+                    Spacer(),
+                    MySwitch(
+                      trueText: l10n.albums,
+                      falseText: l10n.list,
+                      valueNotifier: playlistManager.useAlbumStructureNotifier,
+                      onToggleCallBack: () {
+                        setting.save();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (!isRanking && !isRecently)
+            ValueListenableBuilder(
+              valueListenable: playlistManager.useAlbumStructureNotifier,
+              builder: (context, value, child) {
+                // 专辑结构模式固定按专辑排序，隐藏歌曲排序入口
+                if (albumStructureActive) {
+                  return SizedBox.shrink();
+                }
+                return child!;
+              },
+              child: ListTile(
+                leading: ImageIcon(sequenceImage),
+                title: Text(
+                  l10n.sortSongs,
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                visualDensity: const VisualDensity(horizontal: 0, vertical: -4),
+                onTap: () {
+                  Navigator.pop(context);
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    useRootNavigator: true,
+                    builder: (context) {
+                      List<String> orderText = [
+                        l10n.defaultText,
+                        l10n.titleAscending,
+                        l10n.titleDescending,
+                        l10n.artistAscending,
+                        l10n.artistDescending,
+                        l10n.albumAscending,
+                        l10n.albumDescending,
+                        l10n.durationAscending,
+                        l10n.durationDescending,
+                      ];
+                      if (isLibrary &&
+                              (sourceType == .local || sourceType == .webdav) ||
+                          folder != null) {
+                        orderText.add(l10n.modifiedTimeAscending);
+                        orderText.add(l10n.modifiedTimedescending);
+                        orderText.add(l10n.randomizeTemp);
+                        orderText.add(l10n.randomizePermanent);
+                      }
+                      List<Widget> orderWidget = [];
+                      for (int i = 0; i < orderText.length; i++) {
+                        String text = orderText[i];
+                        orderWidget.add(
+                          ValueListenableBuilder(
+                            valueListenable: sortTypeNotifier,
+                            builder: (context, value, child) {
+                              return ListTile(
+                                title: Text(text),
+                                onTap: () async {
+                                  if (i == 12) {
+                                    if (!await showConfirmDialog(
+                                      context,
+                                      l10n.cannotBeUndone,
+                                    )) {
+                                      return;
+                                    }
+                                    sortTypeNotifier.value = 0;
+                                    if (isLibrary) {
+                                      library.shuffle(sourceType);
+                                    } else {
+                                      folder!.shuffle();
+                                    }
                                   } else {
-                                    folder!.shuffle();
-                                  }
-                                } else {
-                                  if (i == 11 && sortTypeNotifier.value == 11) {
-                                    updateSongList();
-                                  }
-                                  sortTypeNotifier.value = i;
+                                    if (i == 11 &&
+                                        sortTypeNotifier.value == 11) {
+                                      updateSongList();
+                                    }
+                                    sortTypeNotifier.value = i;
 
-                                  playlist?.saveSetting();
-                                }
-                              },
-                              trailing: value == i ? Icon(Icons.check) : null,
-                              visualDensity: VisualDensity(
-                                horizontal: 0,
-                                vertical: -4,
+                                    playlist?.saveSetting();
+                                  }
+                                },
+                                trailing: value == i ? Icon(Icons.check) : null,
+                                visualDensity: VisualDensity(
+                                  horizontal: 0,
+                                  vertical: -4,
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      }
+                      return MySheet(
+                        Column(
+                          children: [
+                            ListTile(title: Text(l10n.selectSortingType)),
+                            MyDivider(
+                              thickness: 0.5,
+                              height: 1,
+                              color: dividerColor,
+                            ),
+
+                            Expanded(
+                              child: ListView(
+                                children: [
+                                  ...orderWidget,
+                                  SizedBox(height: 50),
+                                ],
                               ),
-                            );
-                          },
+                            ),
+                          ],
                         ),
                       );
-                    }
-                    return MySheet(
-                      Column(
-                        children: [
-                          ListTile(title: Text(l10n.selectSortingType)),
-                          MyDivider(
-                            thickness: 0.5,
-                            height: 1,
-                            color: dividerColor,
-                          ),
-
-                          Expanded(
-                            child: ListView(
-                              children: [...orderWidget, SizedBox(height: 50)],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
+                    },
+                  );
+                },
+              ),
             ),
 
           if (folder == null)
@@ -321,6 +365,9 @@ extension _SongListPage on _SongListState {
             listIsScrollingNotifier: listIsScrollingNotifier,
             currentSongListNotifier: currentSongListNotifier,
             offset: 300 - MediaQuery.heightOf(context) / 2,
+            displayIndexOf: (index) => albumStructureActive
+                ? albumStructureRows.indexOf(index)
+                : index,
           ),
         ),
       ],
@@ -369,6 +416,25 @@ extension _SongListPage on _SongListState {
     );
   }
 
+  // 专辑结构模式的专辑头行，样式对齐专辑页条目（封面 + 专辑名 + 歌数）
+  Widget albumHeaderTile(List<MyAudioMetadata> currentSongList, int start) {
+    final l10n = AppLocalizations.of(context);
+    final song = currentSongList[start];
+    return ListTile(
+      contentPadding: EdgeInsets.fromLTRB(20, 0, 20, 0),
+      leading: CoverArtWidget(size: 40, borderRadius: 4, song: song),
+      title: Text(
+        getAlbum(song),
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
+      subtitle: Text(
+        l10n.songCount(albumStructureGroupCount(start)),
+        style: TextStyle(fontSize: 12),
+      ),
+    );
+  }
+
   Widget pageContent() {
     return CustomScrollView(
       controller: scrollController,
@@ -377,6 +443,31 @@ extension _SongListPage on _SongListState {
         ValueListenableBuilder(
           valueListenable: currentSongListNotifier,
           builder: (context, currentSongList, child) {
+            if (albumStructureActive) {
+              return SliverFixedExtentList.builder(
+                itemExtent: 60,
+                itemCount: albumStructureRows.length,
+                itemBuilder: (context, index) {
+                  final row = albumStructureRows[index];
+                  if (row < 0) {
+                    return Center(
+                      child: albumHeaderTile(currentSongList, -row - 1),
+                    );
+                  }
+                  return Center(
+                    child: SongListTile(
+                      index: row,
+                      songList: currentSongList,
+                      folder: folder,
+                      playlist: playlist,
+                      isRanking: isRanking,
+                      isLibrary: isLibrary,
+                      reorderable: false,
+                    ),
+                  );
+                },
+              );
+            }
             return SliverFixedExtentList.builder(
               itemExtent: 60,
               itemCount: currentSongList.length,

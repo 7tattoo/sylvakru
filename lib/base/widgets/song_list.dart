@@ -25,9 +25,11 @@ import 'package:sylvakru/base/my_audio_metadata.dart';
 import 'package:sylvakru/base/data/playlist.dart';
 import 'package:sylvakru/base/utils/metadata_utils.dart';
 import 'package:sylvakru/base/widgets/edit_metadata.dart';
+import 'package:sylvakru/base/data/setting.dart';
 import 'package:sylvakru/base/widgets/my_divider.dart';
 import 'package:sylvakru/base/widgets/my_location.dart';
 import 'package:sylvakru/base/widgets/my_sheet.dart';
+import 'package:sylvakru/base/widgets/my_switch.dart';
 import 'package:sylvakru/base/widgets/playlist_widgets.dart';
 import 'package:sylvakru/base/widgets/selectable_song_list_page.dart';
 import 'package:sylvakru/base/widgets/song_info.dart';
@@ -101,6 +103,10 @@ class _SongListState extends State<SongList> {
 
   final currentSongListNotifier = ValueNotifier<List<MyAudioMetadata>>([]);
 
+  // 专辑结构显示行：>=0 为 currentSongList 中的歌曲索引，
+  // 负值 -(i+1) 表示从歌曲索引 i 开始的一段专辑的专辑头
+  List<int> albumStructureRows = [];
+
   final listIsScrollingNotifier = ValueNotifier(false);
   final scrollController = ScrollController();
   final textController = TextEditingController();
@@ -142,10 +148,31 @@ class _SongListState extends State<SongList> {
         : title;
   }
 
+  bool get albumStructureActive =>
+      playlist != null && playlistManager.useAlbumStructureNotifier.value;
+
   void updateSongList() {
     final value = textController.text;
     final filteredSongList = filterSongList(songList, value);
-    sortSongList(sortTypeNotifier.value, filteredSongList);
+    if (albumStructureActive) {
+      // 专辑结构固定按专辑升序排列，专辑内按碟号/音轨号
+      sortSongList(5, filteredSongList);
+    } else {
+      sortSongList(sortTypeNotifier.value, filteredSongList);
+    }
+
+    albumStructureRows = [];
+    if (albumStructureActive) {
+      String? lastAlbum;
+      for (int i = 0; i < filteredSongList.length; i++) {
+        final album = getAlbum(filteredSongList[i]);
+        if (album != lastAlbum) {
+          lastAlbum = album;
+          albumStructureRows.add(-i - 1);
+        }
+        albumStructureRows.add(i);
+      }
+    }
     currentSongListNotifier.value = filteredSongList;
 
     isSelectedList = List.generate(
@@ -156,7 +183,8 @@ class _SongListState extends State<SongList> {
         isMobile ||
         !reorderable ||
         textController.text.isNotEmpty ||
-        sortTypeNotifier.value > 0;
+        sortTypeNotifier.value > 0 ||
+        albumStructureActive;
 
     continuousSelectBeginIndex = 0;
 
@@ -236,9 +264,24 @@ class _SongListState extends State<SongList> {
     }
     rootVisibleNotifier?.addListener(updateHideOthers);
 
+    if (playlist != null) {
+      playlistManager.useAlbumStructureNotifier.addListener(updateSongList);
+    }
+
     updateSongList();
     sortTypeNotifier.addListener(updateSongList);
     textController.addListener(updateSongList);
+  }
+
+  // 专辑头对应专辑段的歌曲数（start 为该段首曲在 currentSongList 中的索引）
+  int albumStructureGroupCount(int start) {
+    final list = currentSongListNotifier.value;
+    final album = getAlbum(list[start]);
+    int end = start + 1;
+    while (end < list.length && getAlbum(list[end]) == album) {
+      end++;
+    }
+    return end - start;
   }
 
   @override
@@ -252,6 +295,10 @@ class _SongListState extends State<SongList> {
     }
 
     rootVisibleNotifier?.removeListener(updateHideOthers);
+
+    if (playlist != null) {
+      playlistManager.useAlbumStructureNotifier.removeListener(updateSongList);
+    }
 
     sortTypeNotifier.removeListener(updateSongList);
     textController.removeListener(updateSongList);

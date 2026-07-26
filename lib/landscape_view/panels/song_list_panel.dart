@@ -29,14 +29,15 @@ extension _SongListPanel on _SongListState {
                 showCenterMessage(context, 'Current song not found');
                 return;
               }
+              final displayIndex = albumStructureActive
+                  ? albumStructureRows.indexOf(index)
+                  : index;
               final position = scrollController.position;
               final maxScrollExtent = position.maxScrollExtent;
               final minScrollExtent = position.minScrollExtent;
               scrollController.animateTo(
-                (60 * index + 355 - (MediaQuery.heightOf(context) / 2)).clamp(
-                  minScrollExtent,
-                  maxScrollExtent,
-                ),
+                (60 * displayIndex + 355 - (MediaQuery.heightOf(context) / 2))
+                    .clamp(minScrollExtent, maxScrollExtent),
                 duration: Duration(milliseconds: 250),
                 curve: Curves.linear,
               );
@@ -59,7 +60,15 @@ extension _SongListPanel on _SongListState {
         SliverToBoxAdapter(
           child: Padding(
             padding: padding,
-            child: Opacity(opacity: hideOthers ? 0 : 1, child: label()),
+            child: Opacity(
+              opacity: hideOthers ? 0 : 1,
+              child: ValueListenableBuilder(
+                valueListenable: playlistManager.useAlbumStructureNotifier,
+                builder: (context, value, child) {
+                  return label();
+                },
+              ),
+            ),
           ),
         ),
 
@@ -68,6 +77,22 @@ extension _SongListPanel on _SongListState {
           sliver: ValueListenableBuilder(
             valueListenable: currentSongListNotifier,
             builder: (context, currentSongList, child) {
+              if (albumStructureActive) {
+                return SliverFixedExtentList.builder(
+                  itemExtent: 60,
+                  itemCount: albumStructureRows.length,
+                  itemBuilder: (context, index) {
+                    if (hideOthers) {
+                      return SizedBox();
+                    }
+                    final row = albumStructureRows[index];
+                    if (row < 0) {
+                      return albumHeaderRow(currentSongList, -row - 1);
+                    }
+                    return songListItem(row);
+                  },
+                );
+              }
               return SliverReorderableList(
                 itemExtent: 60,
                 itemBuilder: (context, index) {
@@ -139,6 +164,25 @@ extension _SongListPanel on _SongListState {
                         );
                       },
                     ),
+                    trailing: playlist == null
+                        ? null
+                        : SizedBox(
+                            width: 110,
+                            child: Row(
+                              children: [
+                                Spacer(),
+                                MySwitch(
+                                  trueText: l10n.albums,
+                                  falseText: l10n.list,
+                                  valueNotifier:
+                                      playlistManager.useAlbumStructureNotifier,
+                                  onToggleCallBack: () {
+                                    setting.save();
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
                   ),
                   Spacer(),
 
@@ -363,7 +407,8 @@ extension _SongListPanel on _SongListState {
 
   Widget label() {
     final l10n = AppLocalizations.of(context);
-    bool canSort = !isRanking && !isRecently;
+    // 专辑结构模式固定按专辑排序，表头不再响应排序点击
+    bool canSort = !isRanking && !isRecently && !albumStructureActive;
     return SizedBox(
       height: 50,
       child: Row(
@@ -525,6 +570,36 @@ extension _SongListPanel on _SongListState {
             ),
         ],
       ),
+    );
+  }
+
+  // 专辑结构模式的专辑头行（封面 + 专辑名 + 歌数）
+  Widget albumHeaderRow(List<MyAudioMetadata> currentSongList, int start) {
+    final song = currentSongList[start];
+    return Row(
+      children: [
+        SizedBox(
+          width: 60,
+          child: Center(
+            child: CoverArtWidget(size: 40, borderRadius: 4, song: song),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            getAlbum(song),
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        SizedBox(width: 10),
+        Text(
+          AppLocalizations.of(
+            context,
+          ).songCount(albumStructureGroupCount(start)),
+          style: TextStyle(fontSize: 12),
+        ),
+        SizedBox(width: 20),
+      ],
     );
   }
 
@@ -787,6 +862,7 @@ extension _SongListPanel on _SongListState {
 
     if (selectedSongList.length == 1 &&
         reorderable &&
+        !albumStructureActive &&
         textController.text.isEmpty &&
         sortTypeNotifier.value == 0) {
       menuItems.add(

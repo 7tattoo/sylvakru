@@ -34,6 +34,10 @@ class Setting {
         json['playlistsUseLargePicture'] as bool? ??
         playlistManager.useLargePictureNotifier.value;
 
+    playlistManager.useAlbumStructureNotifier.value =
+        json['playlistsUseAlbumStructure'] as bool? ??
+        playlistManager.useAlbumStructureNotifier.value;
+
     vibrationOnNoitifier.value =
         json['vibrationOn'] as bool? ?? vibrationOnNoitifier.value;
 
@@ -80,6 +84,9 @@ class Setting {
 
         'playlistsUseLargePicture':
             playlistManager.useLargePictureNotifier.value,
+
+        'playlistsUseAlbumStructure':
+            playlistManager.useAlbumStructureNotifier.value,
 
         'vibrationOn': vibrationOnNoitifier.value,
         'language': localeNotifier.value?.languageCode,

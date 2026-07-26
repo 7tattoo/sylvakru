@@ -29,6 +29,8 @@ class PlaylistManager {
   Map<String, Playlist> playlistsMap = {};
   ValueNotifier<int> updateNotifier = ValueNotifier(0);
   final useLargePictureNotifier = ValueNotifier(true);
+  // 歌单内容按专辑结构分组显示（全局记忆）
+  final useAlbumStructureNotifier = ValueNotifier(false);
 
   Future<void> initAllPlaylists() async {
     _localFile = File(
