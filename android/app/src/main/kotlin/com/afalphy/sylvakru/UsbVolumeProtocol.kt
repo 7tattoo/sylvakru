@@ -47,6 +47,7 @@ internal enum class IbassoVolumeVerificationAction {
     RETRY_READBACK,
     YIELD_TO_PENDING,
     FREEZE_PCM,
+    FREEZE_DSD,
     PAUSE_DSD,
 }
 
@@ -115,6 +116,8 @@ internal fun ibassoVolumeVerificationAction(
     failureCount: Int,
     isDsd: Boolean,
     hasPendingRequest: Boolean = false,
+    targetDsdRaw: Int? = null,
+    previousDsdRaw: Int? = null,
 ): IbassoVolumeVerificationAction = when {
     readbackRaw == targetRaw -> IbassoVolumeVerificationAction.ACCEPT_TARGET
     previousRaw != null && readbackRaw == previousRaw ->
@@ -123,6 +126,13 @@ internal fun ibassoVolumeVerificationAction(
     // 还有挂起的音量请求＝用户仍在连续调音量：读回失败多半是 HID 忙不过来，
     // 马上会有下一个事务重写覆盖，让位而不是冻结/暂停触发保护。
     hasPendingRequest -> IbassoVolumeVerificationAction.YIELD_TO_PENDING
+    // DSD 无数字兜底，但本会话已有可信硬件值且两个寄存器目标都只降不升时，
+    // 已发出的写入即使生效也只会更小声：冻结在可信值上继续播放，不再暂停；
+    // 任一寄存器要升（含 DSD 增益补偿变化导致）仍严格暂停。
+    isDsd && previousRaw != null && targetRaw <= previousRaw &&
+        targetDsdRaw != null && previousDsdRaw != null &&
+        targetDsdRaw <= previousDsdRaw ->
+        IbassoVolumeVerificationAction.FREEZE_DSD
     isDsd -> IbassoVolumeVerificationAction.PAUSE_DSD
     else -> IbassoVolumeVerificationAction.FREEZE_PCM
 }
@@ -474,11 +484,16 @@ internal fun unsafeDsdVolumeReason(
     hardwareVolumeActive: Boolean,
     readbackVerified: Boolean,
     writeOnly: Boolean,
+    frozenAtTrustedTarget: Boolean = false,
 ): String? {
     if (!isDsd) return null
     if (!hardwareVolumeActive) {
         return "DSD playback requires active hardware volume."
     }
+    // 回读失灵但冻结在本会话可信硬件值上：实际音量只可能 ≤ 可信值，允许
+    // 继续播放；升音量请求在冻结路径里已被拒绝。write-only 从未有过可信
+    // 回读，不适用。
+    if (frozenAtTrustedTarget && !writeOnly) return null
     if (writeOnly || !readbackVerified) {
         return "DSD playback requires readable hardware volume confirmation."
     }

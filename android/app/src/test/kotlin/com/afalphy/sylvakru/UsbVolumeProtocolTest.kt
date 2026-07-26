@@ -148,6 +148,39 @@ class UsbVolumeProtocolTest {
     }
 
     @Test
+    fun allowsFrozenDsdPlaybackOnlyAtATrustedTarget() {
+        assertNull(
+            unsafeDsdVolumeReason(
+                isDsd = true,
+                hardwareVolumeActive = true,
+                readbackVerified = false,
+                writeOnly = false,
+                frozenAtTrustedTarget = true,
+            ),
+        )
+        assertEquals(
+            "DSD playback requires readable hardware volume confirmation.",
+            unsafeDsdVolumeReason(
+                isDsd = true,
+                hardwareVolumeActive = true,
+                readbackVerified = false,
+                writeOnly = true,
+                frozenAtTrustedTarget = true,
+            ),
+        )
+        assertEquals(
+            "DSD playback requires active hardware volume.",
+            unsafeDsdVolumeReason(
+                isDsd = true,
+                hardwareVolumeActive = false,
+                readbackVerified = false,
+                writeOnly = false,
+                frozenAtTrustedTarget = true,
+            ),
+        )
+    }
+
+    @Test
     fun exposesIbassoProtocolCapabilities() {
         assertEquals("ibassoHid", protocol.id)
         assertEquals(
@@ -406,6 +439,46 @@ class UsbVolumeProtocolTest {
         assertEquals(
             IbassoVolumeVerificationAction.PAUSE_DSD,
             ibassoVolumeVerificationAction(100, 102, null, 3, isDsd = true),
+        )
+    }
+
+    @Test
+    fun freezesDsdAtTheTrustedTargetOnlyWhenBothRegistersDoNotRise() {
+        assertEquals(
+            IbassoVolumeVerificationAction.FREEZE_DSD,
+            ibassoVolumeVerificationAction(
+                100, 102, null, 3,
+                isDsd = true,
+                targetDsdRaw = 98,
+                previousDsdRaw = 100,
+            ),
+        )
+        assertEquals(
+            IbassoVolumeVerificationAction.PAUSE_DSD,
+            ibassoVolumeVerificationAction(
+                104, 102, null, 3,
+                isDsd = true,
+                targetDsdRaw = 102,
+                previousDsdRaw = 100,
+            ),
+        )
+        assertEquals(
+            IbassoVolumeVerificationAction.PAUSE_DSD,
+            ibassoVolumeVerificationAction(
+                100, 102, null, 3,
+                isDsd = true,
+                targetDsdRaw = 102,
+                previousDsdRaw = 100,
+            ),
+        )
+        assertEquals(
+            IbassoVolumeVerificationAction.PAUSE_DSD,
+            ibassoVolumeVerificationAction(
+                100, null, null, 3,
+                isDsd = true,
+                targetDsdRaw = 98,
+                previousDsdRaw = null,
+            ),
         )
     }
 
