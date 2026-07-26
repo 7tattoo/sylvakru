@@ -164,7 +164,7 @@ void handleFeedbackUrb(PendingUrb pending) {
     }
 }
 
-std::string reapOneLocked(bool blocking) {
+std::string reapOneLocked(bool blocking, bool* reaped = nullptr) {
     if (g_pending_urbs.empty()) {
         return {};
     }
@@ -183,6 +183,9 @@ std::string reapOneLocked(bool blocking) {
         [completed](const PendingUrb& pending) { return pending.urb == completed; });
     if (found == g_pending_urbs.end()) {
         return "USBDEVFS_REAPURB returned an unknown URB.";
+    }
+    if (reaped != nullptr) {
+        *reaped = true;
     }
 
     const PendingUrb completed_pending = *found;
@@ -204,9 +207,13 @@ std::string reapOneLocked(bool blocking) {
 
 std::string reapCompletedLocked() {
     std::string error;
+    // 非阻塞收回全部已完成 URB。之前每次只收一个，切歌排空轮询看到的
+    // pending 数远落后于实际播放进度，排空永远等不到 0 只能超时硬关，
+    // DISCARDURB 掐断残留音频出小音爆。
     while (error.empty() && !g_pending_urbs.empty()) {
-        error = reapOneLocked(false);
-        if (error.empty()) {
+        bool reaped = false;
+        error = reapOneLocked(false, &reaped);
+        if (!reaped) {
             break;
         }
     }

@@ -123,6 +123,13 @@ internal fun pcmVolumeRampSteps(startGainQ16: Int, targetGainQ16: Int): Int {
 
 internal enum class OutputDrainAction { WAIT, DRAINED, TIMED_OUT }
 
+// 排空超时按旧会话水位给足：切歌瞬间 native 队列挂着接近一整个水位的音频，
+// 淡出尾又排在最后，固定 220ms 连本地 150ms 水位都放不完（流式水位 ≥1000ms
+// 更不可能），必然超时硬关掐断残留音频。常量部分作为线程收尾/轮询余量保留。
+internal fun usbTransitionDrainTimeoutMs(targetBufferMs: Int): Long =
+    targetBufferMs + USB_TRANSITION_FADE_MS + USB_TRANSITION_OLD_SILENCE_MS +
+        USB_TRANSITION_DRAIN_TIMEOUT_MS
+
 internal fun outputDrainAction(
     pendingPackets: Long,
     elapsedMs: Long,

@@ -719,7 +719,15 @@ class UsbExclusiveAudioEngine(
             UsbStreamTransitionAction.SILENT_RECONFIGURE ->
                 stopWorkerForSilentReconfigure(silencePlan)
             UsbStreamTransitionAction.OPEN_FRESH -> {
-                stopWorkerKeepingSession()
+                // 自然播完自动切歌等非替换启动也可能带着还在放残留缓冲的旧连接
+                // （deferred close 4s 窗口内），关会话前同样有界排空，否则
+                // DISCARDURB 半途掐断残留音频出小音爆
+                if (stopWorkerKeepingSession() && connection != null) {
+                    awaitOldOutputDrain(
+                        SystemClock.elapsedRealtime(),
+                        usbTransitionDrainTimeoutMs(targetBufferMs),
+                    )
+                }
                 false
             }
         }
@@ -3114,7 +3122,8 @@ class UsbExclusiveAudioEngine(
         updateSessionDiagnostics("transitionStage", "old-tail-started")
         return try {
             val usable = stopWorkerKeepingSession()
-            if (usable) awaitOldOutputDrain(startedAtMs)
+            // 超时按旧会话水位动态给足：切歌瞬间队列近满，淡出尾排在最后
+            if (usable) awaitOldOutputDrain(startedAtMs, usbTransitionDrainTimeoutMs(targetBufferMs))
             usable
         } finally {
             silentReconfigureRequested.set(false)
@@ -3122,11 +3131,11 @@ class UsbExclusiveAudioEngine(
         }
     }
 
-    private fun awaitOldOutputDrain(startedAtMs: Long) {
+    private fun awaitOldOutputDrain(startedAtMs: Long, timeoutMs: Long) {
         while (true) {
             val pendingPackets = UsbExclusiveNative.transportTelemetry().getOrNull(0) ?: 0L
             val elapsedMs = SystemClock.elapsedRealtime() - startedAtMs
-            when (outputDrainAction(pendingPackets, elapsedMs, USB_TRANSITION_DRAIN_TIMEOUT_MS)) {
+            when (outputDrainAction(pendingPackets, elapsedMs, timeoutMs)) {
                 OutputDrainAction.DRAINED -> {
                     updateSessionDiagnostics("transitionStage", "old-output-drained")
                     return

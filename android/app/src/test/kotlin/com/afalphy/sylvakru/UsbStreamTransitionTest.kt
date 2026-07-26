@@ -170,6 +170,12 @@ class UsbStreamTransitionTest {
     }
 
     @Test
+    fun scalesDrainTimeoutToTheOldSessionBufferLevel() {
+        assertEquals(410L, usbTransitionDrainTimeoutMs(150))
+        assertEquals(1260L, usbTransitionDrainTimeoutMs(1000))
+    }
+
+    @Test
     fun preservesTrustedHardwareTargetOnlyForTheSameDeviceAndProtocol() {
         assertTrue(
             shouldPreserveTrustedHardwareVolume(
