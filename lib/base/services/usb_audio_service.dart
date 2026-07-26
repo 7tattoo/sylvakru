@@ -602,6 +602,8 @@ class UsbExclusivePlaybackState {
   final String? playbackId;
   final bool active;
   final bool playing;
+  // 流式独占下载没跟上、引擎垫静音等数据中
+  final bool buffering;
   final Duration position;
   final Duration? duration;
   final int? sampleRate;
@@ -630,6 +632,7 @@ class UsbExclusivePlaybackState {
     required this.playbackId,
     required this.active,
     required this.playing,
+    this.buffering = false,
     required this.position,
     required this.duration,
     required this.sampleRate,
@@ -686,6 +689,7 @@ class UsbExclusivePlaybackState {
       playbackId: map['playbackId'] as String?,
       active: map['active'] == true,
       playing: map['playing'] == true,
+      buffering: map['buffering'] == true,
       position: Duration(milliseconds: _asInt(map['positionMs']) ?? 0),
       duration: _asInt(map['durationMs']) == null
           ? null

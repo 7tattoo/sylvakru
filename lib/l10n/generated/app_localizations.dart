@@ -2048,6 +2048,24 @@ abstract class AppLocalizations {
   /// **'Output port'**
   String get outputPort;
 
+  /// No description provided for @bufferingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Buffering'**
+  String get bufferingLabel;
+
+  /// No description provided for @usbStreamingBuffering.
+  ///
+  /// In en, this message translates to:
+  /// **'Buffering…'**
+  String get usbStreamingBuffering;
+
+  /// No description provided for @usbStreamingBufferingDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the network download to catch up'**
+  String get usbStreamingBufferingDetail;
+
   /// No description provided for @encoding.
   ///
   /// In en, this message translates to:

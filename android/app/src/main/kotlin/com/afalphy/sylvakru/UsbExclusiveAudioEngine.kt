@@ -256,6 +256,8 @@ class UsbExclusiveAudioEngine(
     @Volatile
     private var activeTransitionSilencePlan = UsbTransitionSilencePlan(0, 0, 0)
     private val pendingSeekMs = AtomicLong(-1L)
+    // 流式独占下载没跟上、正在垫静音等数据：上报 Dart 显示缓冲中而不是静默冻结
+    private val streamingBuffering = AtomicBoolean(false)
 
     @Volatile private var playbackId: String? = null
     @Volatile private var currentState = inactiveState()
@@ -3086,6 +3088,7 @@ class UsbExclusiveAudioEngine(
         stopped.set(true)
         paused.set(false)
         pendingSeekMs.set(-1L)
+        streamingBuffering.set(false)
         val thread = worker
         worker = null
         if (thread == null || thread == Thread.currentThread()) {
@@ -3543,6 +3546,7 @@ class UsbExclusiveAudioEngine(
                                     streamBufferingLogged = true
                                     UsbDiagnostics.i(tag, "streaming decoder buffering at ${streamTargetMs}ms, waiting for download")
                                 }
+                                setStreamingBuffering(true)
                                 Thread.sleep(80)
                                 if (pendingSeekMs.get() < 0L) {
                                     extractor.seekTo(streamTargetMs * 1000, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
@@ -3559,6 +3563,7 @@ class UsbExclusiveAudioEngine(
                             sawInputEos = true
                         } else {
                             streamBufferingLogged = false
+                            setStreamingBuffering(false)
                             codec.queueInputBuffer(
                                 inputIndex,
                                 0,
@@ -3909,6 +3914,7 @@ class UsbExclusiveAudioEngine(
                 val complete = !partFile.exists()
                 val length = input.length()
                 if (complete || length >= required) {
+                    setStreamingBuffering(false)
                     if (position >= length) {
                         return -1
                     }
@@ -3922,6 +3928,7 @@ class UsbExclusiveAudioEngine(
                         "streaming source buffering: need=${position + size}, have=$length",
                     )
                 }
+                setStreamingBuffering(true)
                 required = position + size + rebufferBytes
                 Thread.sleep(50)
             }
@@ -4055,11 +4062,13 @@ class UsbExclusiveAudioEngine(
                                 "DSD streaming buffering at ${reader.positionMs}ms, have=$length",
                             )
                         }
+                        setStreamingBuffering(true)
                         packetizer.write(dop.encodeSilence(silenceFramesPerWrite))
                         continue
                     }
                     streamingResumeBytes = 0L
                     streamingBufferingLogged = false
+                    setStreamingBuffering(false)
                 }
 
                 val count = reader.read(buffer)
@@ -4261,6 +4270,7 @@ class UsbExclusiveAudioEngine(
                         streamBufferingLogged = true
                         UsbDiagnostics.i(tag, "streaming raw PCM buffering at ${streamTargetMs}ms, waiting for download")
                     }
+                    setStreamingBuffering(true)
                     Thread.sleep(80)
                     // 没有更新的用户 seek 时重探当前位置；有的话留给顶部消费新目标
                     if (pendingSeekMs.get() < 0L) {
@@ -4271,6 +4281,7 @@ class UsbExclusiveAudioEngine(
                 break
             }
             streamBufferingLogged = false
+            setStreamingBuffering(false)
             val data = ByteArray(sampleSize)
             buffer.position(0)
             buffer.limit(sampleSize)
@@ -5699,6 +5710,14 @@ class UsbExclusiveAudioEngine(
     private fun consumePendingSeekMs(): Long? {
         val seekMs = pendingSeekMs.getAndSet(-1L)
         return if (seekMs >= 0L) seekMs else null
+    }
+
+    // 流式独占缓冲状态只在进入/退出饥饿时各推一次；会话未激活时只记内部标志
+    private fun setStreamingBuffering(active: Boolean) {
+        if (streamingBuffering.getAndSet(active) == active) return
+        if (currentState["active"] == true) {
+            updateState(currentState + mapOf("buffering" to active))
+        }
     }
 
     private fun updateState(state: Map<String, Any?>): Map<String, Any?> {

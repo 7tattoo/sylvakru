@@ -1018,6 +1018,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get outputPort => '输出端口';
 
   @override
+  String get bufferingLabel => '缓冲';
+
+  @override
+  String get usbStreamingBuffering => '缓冲中…';
+
+  @override
+  String get usbStreamingBufferingDetail => '网络下载没跟上，正在等待数据';
+
+  @override
   String get encoding => '编码';
 
   @override

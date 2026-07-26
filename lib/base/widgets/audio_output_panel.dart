@@ -214,6 +214,8 @@ class AudioOutputChip extends StatelessWidget {
         final bitDepth = _bitDepthLabel(status, l10n);
         final chipColor = _chipColor(color);
         final dotColor = _outputDotColor(status, exclusive);
+        // 流式独占缓冲中：胶囊首段临时显示缓冲提示，避免下载没跟上时看似死机
+        final buffering = exclusive.active && exclusive.buffering;
 
         return Center(
           child: Material(
@@ -249,7 +251,9 @@ class AudioOutputChip extends StatelessWidget {
                     const SizedBox(width: 9),
                     Flexible(
                       child: Text(
-                        '$outputRate  |  $bitDepth  |  $outputName',
+                        buffering
+                            ? '${l10n.usbStreamingBuffering}  |  $bitDepth  |  $outputName'
+                            : '$outputRate  |  $bitDepth  |  $outputName',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -648,6 +652,11 @@ class _AudioOutputSheetState extends State<_AudioOutputSheet> {
                     surface: surface,
                     border: border,
                     rows: [
+                      if (exclusive.active && exclusive.buffering)
+                        _InfoRow(
+                          l10n.bufferingLabel,
+                          l10n.usbStreamingBufferingDetail,
+                        ),
                       _InfoRow(l10n.outputPort, _outputPortLabel(status, l10n)),
                       _InfoRow(
                         l10n.outputSampleRate,

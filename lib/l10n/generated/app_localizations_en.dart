@@ -1041,6 +1041,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get outputPort => 'Output port';
 
   @override
+  String get bufferingLabel => 'Buffering';
+
+  @override
+  String get usbStreamingBuffering => 'Buffering…';
+
+  @override
+  String get usbStreamingBufferingDetail =>
+      'Waiting for the network download to catch up';
+
+  @override
   String get encoding => 'Encoding';
 
   @override
