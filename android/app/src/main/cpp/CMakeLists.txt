@@ -95,6 +95,16 @@ add_library(
 )
 target_include_directories(sylvakru_usb_volume_protocol PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+# PCM 分包器纯计算核心（槽位/位深转换、数字音量、淡入淡出、反馈包长状态机）：
+# 从引擎 PcmIsoPacketizer 下沉；线程/缓冲/URB 节奏仍在 Kotlin。
+# 音量安全红线：数字音量数值行为改动必须先过 usb_pcm_packetizer_test 对拍
+add_library(
+    sylvakru_usb_pcm_packetizer
+    STATIC
+    usb_pcm_packetizer.cpp
+)
+target_include_directories(sylvakru_usb_pcm_packetizer PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 if(ANDROID)
     add_library(
         sylvakru_usb_exclusive
@@ -152,6 +162,10 @@ if(SYLVAKRU_BUILD_HOST_TESTS)
     # UAC 描述符测试：手工构造 UAC1/UAC2 描述符片段对拍
     add_executable(usb_uac_test tests/usb_uac_test.cpp)
     target_link_libraries(usb_uac_test PRIVATE sylvakru_usb_uac)
+
+    # PCM 分包器核心测试：对拍 Kotlin 转换/增益/淡入/包长语义（含 DoP 透传红线）
+    add_executable(usb_pcm_packetizer_test tests/usb_pcm_packetizer_test.cpp)
+    target_link_libraries(usb_pcm_packetizer_test PRIVATE sylvakru_usb_pcm_packetizer)
 
     # quirk 键匹配/采样率选择测试：对拍 Kotlin 匹配用例
     add_executable(usb_dac_quirks_test tests/usb_dac_quirks_test.cpp)
