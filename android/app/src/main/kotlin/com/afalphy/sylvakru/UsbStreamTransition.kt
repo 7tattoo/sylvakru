@@ -68,49 +68,12 @@ internal fun shouldPublishUsbStartFailure(
     currentActive: Boolean,
 ): Boolean = !replaceActive || transitionCommitted || !currentActive
 
-internal fun pcmFadeToSilence(
-    lastSamples: IntArray,
-    fadeFrames: Int,
-    silenceFrames: Int,
-): IntArray {
-    require(lastSamples.isNotEmpty())
-    require(fadeFrames > 0)
-    require(silenceFrames >= 0)
-    val result = IntArray((fadeFrames + silenceFrames) * lastSamples.size)
-    val denominator = (fadeFrames - 1).coerceAtLeast(1)
-    for (frame in 0 until fadeFrames) {
-        val numerator = (fadeFrames - 1 - frame).coerceAtLeast(0)
-        for (channel in lastSamples.indices) {
-            result[frame * lastSamples.size + channel] =
-                ((lastSamples[channel].toLong() * numerator) / denominator).toInt()
-        }
-    }
-    return result
-}
-
-internal fun pcmSampleForUsbTransition(
-    sample: Int,
-    inputBitDepth: Int,
-    usbBitResolution: Int,
-    gainQ16: Int,
-): Int {
-    val adjusted = ((sample.toLong() * gainQ16.coerceIn(0, 65536)) shr 16).toInt()
-    return if (usbBitResolution >= inputBitDepth) {
-        adjusted shl (usbBitResolution - inputBitDepth)
-    } else {
-        adjusted shr (inputBitDepth - usbBitResolution)
-    }
-}
+// 逐样本/逐帧热路径的纯函数（淡出尾巴、槽位对齐移位、恢复淡入增益）已随
+// PcmIsoPacketizer 核心下沉 native（usb_pcm_packetizer.cpp），此处不再保留
+// Kotlin 副本，避免双实现漂移；对拍测试见 cpp/tests/usb_pcm_packetizer_test.cpp。
 
 internal fun usbSilenceFrames(sampleRate: Int, durationMs: Int): Int =
     ((sampleRate.toLong() * durationMs + 999L) / 1000L).coerceAtLeast(1L).toInt()
-
-// 恢复播放的逐帧淡入增益：从 0 线性升到满刻度，消掉任意样本点续播的幅度跳变。
-internal fun pcmFadeInGainQ16(frameIndex: Int, totalFrames: Int): Int {
-    require(totalFrames > 0)
-    if (frameIndex >= totalFrames) return 65536
-    return ((frameIndex.coerceAtLeast(0).toLong() shl 16) / totalFrames).toInt()
-}
 
 // 数字音量渐变步数：上升按跨度限速（满跨度约 600ms）防止误拖滑条炸耳，
 // 下降保持最少步数快速到位。

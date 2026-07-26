@@ -90,69 +90,11 @@ class UsbStreamTransitionTest {
     }
 
     @Test
-    fun fadeInGainRisesMonotonicallyToUnity() {
-        assertEquals(0, pcmFadeInGainQ16(0, 8))
-        assertEquals(32768, pcmFadeInGainQ16(4, 8))
-        assertEquals(65536, pcmFadeInGainQ16(8, 8))
-        assertEquals(65536, pcmFadeInGainQ16(9, 8))
-        assertTrue(
-            (0 until 8).all { index ->
-                pcmFadeInGainQ16(index, 8) <= pcmFadeInGainQ16(index + 1, 8)
-            },
-        )
-    }
-
-    @Test
-    fun alignsTheGainAdjustedLastPcmSampleInTheUsbDomain() {
-        assertEquals(4096, pcmSampleForUsbTransition(32, 16, 24, 32768))
-        assertEquals(-4096, pcmSampleForUsbTransition(-32, 16, 24, 32768))
-        assertEquals(32, pcmSampleForUsbTransition(32, 16, 16, 65536))
-        assertEquals(0x1234, pcmSampleForUsbTransition(0x123456, 24, 16, 65536))
-        assertEquals(Int.MAX_VALUE, pcmSampleForUsbTransition(Int.MAX_VALUE, 32, 32, 65536))
-    }
-
-    @Test
     fun doesNotPublishInactiveStateForAnUncommittedReplacementFailure() {
         assertFalse(shouldPublishUsbStartFailure(true, false, true))
         assertTrue(shouldPublishUsbStartFailure(true, true, true))
         assertTrue(shouldPublishUsbStartFailure(false, false, true))
         assertTrue(shouldPublishUsbStartFailure(true, false, false))
-    }
-
-    @Test
-    fun fadesEveryPcmChannelMonotonicallyToZero() {
-        val tail = pcmFadeToSilence(
-            lastSamples = intArrayOf(8_000_000, -4_000_000),
-            fadeFrames = 5,
-            silenceFrames = 2,
-        )
-        assertEquals(
-            listOf(
-                8_000_000, -4_000_000,
-                6_000_000, -3_000_000,
-                4_000_000, -2_000_000,
-                2_000_000, -1_000_000,
-                0, 0,
-                0, 0,
-                0, 0,
-            ),
-            tail.toList(),
-        )
-    }
-
-    @Test
-    fun fades16And24And32BitDomainSamplesWithoutOverflow() {
-        for (last in intArrayOf(32767, -32767, 8_388_607, -8_388_607, Int.MAX_VALUE, -Int.MAX_VALUE)) {
-            val tail = pcmFadeToSilence(intArrayOf(last), fadeFrames = 9, silenceFrames = 1)
-            assertEquals(last, tail.first())
-            assertEquals(0, tail.last())
-            assertTrue(
-                (0 until tail.lastIndex).all { index ->
-                    kotlin.math.abs(tail[index + 1].toLong()) <=
-                        kotlin.math.abs(tail[index].toLong())
-                },
-            )
-        }
     }
 
     @Test
