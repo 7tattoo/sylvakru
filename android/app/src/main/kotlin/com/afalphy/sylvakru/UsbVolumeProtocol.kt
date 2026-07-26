@@ -3,7 +3,7 @@ package com.afalphy.sylvakru
 /**
  * usb_volume_protocol.cpp 的 JNI 入口：iBasso HID 音量协议纯逻辑
  * （增益换算/音量表映射/HID 报文构造与解析/写后验证与 reader 恢复决策）。
- * 全部为无状态函数；可空 Int 以 has*/value 成对参数传递，枚举按序号传递
+ * 全部为无状态函数；可空 Int 以 hasX + value 成对参数传递，枚举按序号传递
  * （两侧枚举顺序不得重排）。对拍测试见 cpp/tests/usb_volume_protocol_test.cpp。
  *
  * ⚠️ 音量安全红线：数值行为的唯一实现在 native 侧，Kotlin 只留会话策略胶水；
