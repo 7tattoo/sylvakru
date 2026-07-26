@@ -62,6 +62,16 @@ int preferredAutoPcmBitDepth(
             result = depth;
         }
     }
+    if (result != 0) {
+        return result;
+    }
+    // 无精确匹配也无更宽槽位（如 32-bit 源、DAC 最高 24-bit）：退而选最大的较窄
+    // 槽位，避免调用方落回“最小字节数优先”的候选排序错选 16-bit
+    for (const int depth : available) {
+        if (depth < *source_bit_depth && depth > result) {
+            result = depth;
+        }
+    }
     return result;
 }
 

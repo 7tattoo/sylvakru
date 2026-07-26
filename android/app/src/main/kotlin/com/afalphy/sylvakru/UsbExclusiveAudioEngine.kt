@@ -637,7 +637,7 @@ class UsbExclusiveAudioEngine(
             else -> null
         }
         val autoPcmSourceBitDepth = if (dsdReader == null && requestedBitDepth == null) {
-            readPcmSourceBitDepth(file)
+            readPcmSourceBitDepth(file, sourceFormat)
         } else {
             null
         }
@@ -4766,7 +4766,29 @@ class UsbExclusiveAudioEngine(
         packetizer.write(data)
     }
 
-    private fun readPcmSourceBitDepth(file: File): Int? {
+    private fun readPcmSourceBitDepth(file: File, sourceFormat: String?): Int? {
+        // WavPack 系统 MediaExtractor 不识别（正因此才用 libwavpack 解码），走 MediaExtractor
+        // 必然预读失败、自动位深落回 24 优先的兼容顺序，32-bit 源会被压进 24-bit 槽位；
+        // 改用 libwavpack 探测真实有效位深，探完即关不影响正式解码
+        if (isCompleteWavPackFile(file.absolutePath, sourceFormat)) {
+            return try {
+                val decoder = UsbWavPackDecoder.open(file.absolutePath)
+                val bitDepth = decoder.validBitsPerSample.takeIf { it in 8..32 }
+                decoder.close()
+                UsbDiagnostics.i(
+                    tag,
+                    "PCM auto bit depth (wavpack) file=${file.name}, sourceBitDepth=${bitDepth ?: "unknown"}",
+                )
+                bitDepth
+            } catch (error: IOException) {
+                UsbDiagnostics.w(
+                    tag,
+                    "PCM auto bit depth preflight failed for ${file.name}; using compatibility fallback.",
+                    error,
+                )
+                null
+            }
+        }
         val extractor = MediaExtractor()
         return try {
             extractor.setDataSource(file.absolutePath)

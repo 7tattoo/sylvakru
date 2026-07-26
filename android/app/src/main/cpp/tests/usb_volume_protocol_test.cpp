@@ -48,7 +48,9 @@ void selectsUsbSlotFromPcmSourceBitDepthInAutoMode() {
     assert(sylvakru::preferredAutoPcmBitDepth(&source16, {16, 24, 32}) == 16);
     assert(sylvakru::preferredAutoPcmBitDepth(&source20, {16, 24, 32}) == 24);
     assert(sylvakru::preferredAutoPcmBitDepth(nullptr, {16, 24, 32}) == 24);
-    assert(sylvakru::preferredAutoPcmBitDepth(&source32, {16, 24}) == 0);
+    // 无更宽槽位时选最大的较窄槽位，而非放弃偏好（放弃会错选 16-bit）
+    assert(sylvakru::preferredAutoPcmBitDepth(&source32, {16, 24}) == 24);
+    assert(sylvakru::preferredAutoPcmBitDepth(&source32, {}) == 0);
 }
 
 void combinesReplayGainIntoEffectiveLinearGainSafely() {

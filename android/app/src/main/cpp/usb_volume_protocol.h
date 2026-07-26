@@ -18,7 +18,8 @@ inline constexpr int kIbassoUnityGainQ16 = 65536;
 
 // 可空 Int 的约定：指针为 nullptr 表示 Kotlin 侧 null。
 
-// quirk 自动位深选择：优先与源一致，否则向上取最近，否则 null（返回 0）。
+// quirk 自动位深选择：优先与源一致，否则向上取最近，再否则向下取最近，
+// 全无可用位深才返回 0（Kotlin 侧视为 null）。
 // source_bit_depth 为 nullptr 表示未知源位深：按 24/32/16 顺序取第一个可用，
 // 都没有则取最小可用位深。
 int preferredAutoPcmBitDepth(
