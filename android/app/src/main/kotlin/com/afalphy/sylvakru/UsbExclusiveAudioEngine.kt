@@ -23,6 +23,7 @@ import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.Locale
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
@@ -1027,6 +1028,9 @@ class UsbExclusiveAudioEngine(
                     workerNativeFormat,
                     preRollMs,
                 )
+            } else if (!streaming && isCompleteFlacFile(filePath, sourceFormat)) {
+                // 完整本地 FLAC 走 libFLAC 保真实位深；打开失败会在函数内回退系统解码
+                flacDecodeAndWrite(file, target, preRollMs)
             } else {
                 decodeAndWrite(file, target, streaming, streamTotalBytes, preRollMs)
             }
@@ -3691,6 +3695,197 @@ class UsbExclusiveAudioEngine(
         }
     }
 
+    /** 完整本地 FLAC（非 .part）走 libFLAC 原生解码；流式增长文件仍走系统解码路径。 */
+    private fun isCompleteFlacFile(filePath: String, sourceFormat: String?): Boolean {
+        val lower = filePath.lowercase(Locale.ROOT)
+        if (lower.endsWith(".part")) {
+            return false
+        }
+        return sourceFormat == "flac" || lower.endsWith(".flac")
+    }
+
+    /**
+     * 完整本地 FLAC 的独占解码循环：用 libFLAC 输出交错 S32LE 并保留源文件真实
+     * 有效位深，绕开部分厂商 MediaCodec 把 24-bit FLAC 压成 16-bit 的问题。
+     * 打开失败（文件损坏、格式不支持等）发生在首个 PCM 提交前，可安全回退系统
+     * 解码路径；播放中途解码失败与 decodeAndWrite 同语义报错停播，绝不静默从头重播。
+     */
+    private fun flacDecodeAndWrite(
+        file: File,
+        target: OutputTarget,
+        preRollMs: Int = 0,
+    ) {
+        val decoder = try {
+            UsbFlacDecoder.open(file.absolutePath)
+        } catch (error: Throwable) {
+            UsbDiagnostics.w(
+                tag,
+                "libFLAC open failed for ${file.name}, falling back to system decoder: ${error.message}",
+            )
+            decodeAndWrite(file, target, preRollMs = preRollMs)
+            return
+        }
+        val sampleRate = decoder.sampleRate
+        val channels = decoder.channels
+        val validBits = decoder.validBitsPerSample
+        // STREAMINFO 允许总帧数未知（0），此时时长报 null、seek 不设上限
+        val durationMs = decoder.durationMs.takeIf { decoder.totalFrames > 0 }
+        UsbDiagnostics.i(
+            tag,
+            "libFLAC decoder opened file=${file.name}, sampleRate=$sampleRate, channels=$channels, " +
+                "validBits=$validBits, totalFrames=${decoder.totalFrames}, " +
+                "endpointInterval=${target.endpoint.interval}",
+        )
+
+        val startMs = SystemClock.elapsedRealtime()
+        var lastPositionEmitMs = 0L
+        var positionFrames = 0L
+        var preRollPending = preRollMs > 0
+        var transitionAudioStarted = false
+        var packetizer: PcmIsoPacketizer? = null
+        var lastPacketizerWithAudio: PcmIsoPacketizer? = null
+        // 一次拉取的帧数：约 85ms@48k，够小保证暂停/seek 响应，够大摊薄 JNI 开销
+        val chunkFrames = 4096
+        val chunkBytes = chunkFrames * channels * UsbFlacDecoder.BYTES_PER_SAMPLE
+        val buffer = ByteBuffer.allocateDirect(chunkBytes).order(ByteOrder.LITTLE_ENDIAN)
+        val chunk = ByteArray(chunkBytes)
+
+        try {
+            val writer = createPacketizer(
+                sampleRate,
+                channels,
+                validBits,
+                target,
+                inputBytesPerSampleOverride = UsbFlacDecoder.BYTES_PER_SAMPLE,
+            )
+            packetizer = writer
+            if (preRollPending) {
+                writer.writeUsbSilence(usbSilenceFrames(sampleRate, preRollMs))
+                preRollPending = false
+                updateSessionDiagnostics("transitionStage", "new-silence-preroll")
+                schedulePreservedPcmVerificationAfterPreRoll()
+            }
+
+            updateState(
+                currentState + mapOf(
+                    "active" to true,
+                    "playing" to !paused.get(),
+                    "durationMs" to durationMs,
+                    "sampleRate" to sampleRate,
+                    "bitDepth" to (target.usbBitResolution ?: validBits),
+                    "sourceBitDepth" to validBits,
+                    "decodedBitDepth" to validBits,
+                    "usbBitDepth" to (target.usbBitResolution ?: target.usbBytesPerSample * 8),
+                    "bitPerfect" to pcmBitPerfect(
+                        validBits,
+                        validBits,
+                        target.usbBitResolution ?: target.usbBytesPerSample * 8,
+                        volumeControlEnabled,
+                    ),
+                    "message" to "USB exclusive decoding ${file.name} to ${target.endpointLabel} " +
+                        "(libFLAC, ${validBits}-bit), channels=$channels.",
+                ),
+            )
+
+            var endOfStream = false
+            while (!stopped.get() && !endOfStream) {
+                val wasPaused = paused.get()
+                if (wasPaused) {
+                    UsbDiagnostics.i(tag, "exclusive worker waiting because playback is paused.")
+                    // 暂停淡出到零再垫短静音：任意样本点硬断即咔嗒（与系统解码路径同因）
+                    writer.writeTransitionTail(
+                        USB_TRANSITION_FADE_MS,
+                        USB_TRANSITION_OLD_SILENCE_MS,
+                    )
+                }
+                while (paused.get() && !stopped.get()) {
+                    Thread.sleep(25)
+                }
+                if (wasPaused && !stopped.get()) {
+                    UsbDiagnostics.i(tag, "exclusive worker resumed.")
+                    writer.beginFadeIn(USB_PAUSE_RESUME_FADE_MS)
+                }
+                if (stopped.get()) break
+
+                consumePendingSeekMs()?.let { seekMs ->
+                    UsbDiagnostics.i(tag, "exclusive libFLAC seek to ${seekMs}ms.")
+                    // 与系统解码路径同策略：不 flush 在途 URB，旧缓冲淡出后新位置淡入
+                    writer.writeTransitionTail(USB_PAUSE_RESUME_FADE_MS, 0)
+                    val maxFrame = decoder.totalFrames.takeIf { it > 0 } ?: Long.MAX_VALUE
+                    val seekFrame = (seekMs * sampleRate / 1000).coerceIn(0L, maxFrame)
+                    decoder.seekToFrame(seekFrame)
+                    writer.reset()
+                    writer.beginFadeIn(USB_PAUSE_RESUME_FADE_MS)
+                    lastPacketizerWithAudio = null
+                    positionFrames = seekFrame
+                    lastPositionEmitMs = -1L
+                    updateState(
+                        currentState + mapOf(
+                            "active" to true,
+                            "playing" to !paused.get(),
+                            "positionMs" to seekMs,
+                            "message" to "Seeked.",
+                        ),
+                    )
+                }
+
+                val frames = decoder.readFrames(buffer, chunkFrames)
+                if (frames < 0) {
+                    endOfStream = true
+                    continue
+                }
+                if (frames == 0) {
+                    continue
+                }
+                val bytes = frames * channels * UsbFlacDecoder.BYTES_PER_SAMPLE
+                buffer.position(0)
+                buffer.get(chunk, 0, bytes)
+                writer.write(if (bytes == chunk.size) chunk else chunk.copyOf(bytes))
+                lastPacketizerWithAudio = writer
+                if (preRollMs > 0 && !transitionAudioStarted) {
+                    transitionAudioStarted = true
+                    updateSessionDiagnostics("transitionStage", "new-audio-started")
+                }
+
+                positionFrames += frames
+                val positionMs = if (sampleRate > 0) {
+                    positionFrames * 1000 / sampleRate
+                } else {
+                    SystemClock.elapsedRealtime() - startMs
+                }
+                if (positionMs - lastPositionEmitMs >= 250) {
+                    lastPositionEmitMs = positionMs
+                    updateState(
+                        currentState + mapOf(
+                            "active" to true,
+                            "playing" to !paused.get(),
+                            "positionMs" to positionMs,
+                        ),
+                    )
+                }
+            }
+
+            UsbDiagnostics.i(tag, "exclusive libFLAC decode reached end of stream, flushing remainder.")
+            (lastPacketizerWithAudio ?: packetizer)?.let(::finishPcmPacketizer)
+            if (!stopped.get()) {
+                workerEndedAtEof = true
+                updateState(inactiveState("USB exclusive playback completed."))
+            }
+        } catch (error: Throwable) {
+            UsbDiagnostics.w(tag, "Exclusive libFLAC playback failed.", error)
+            sessionBroken = true
+            emitError(error.message ?: "USB exclusive playback failed.")
+        } finally {
+            decoder.close()
+            if (sessionBroken) {
+                hardCloseSession("decode worker failed")
+            } else {
+                // 会话留给下一首热复用，短时间内没有新的 start 再关
+                scheduleDeferredClose()
+            }
+        }
+    }
+
     /**
      * 流式独占的数据源：文件仍在下载增长中。读到未下载区域时等数据，
      * 解码线程随之停在 readSampleData 上，USB 端表现与用户暂停一致（不爆音）；
@@ -4147,8 +4342,11 @@ class UsbExclusiveAudioEngine(
         bitDepth: Int,
         target: OutputTarget,
         applyDigitalVolume: Boolean = true,
+        inputBytesPerSampleOverride: Int? = null,
     ): PcmIsoPacketizer {
-        val inputBytesPerSample = bytesPerSampleForBitDepth(bitDepth)
+        // libFLAC 路径的容器固定 4 字节（S32LE 装 16/20/24/32 有效位），
+        // 与"按有效位深推导字节数"的系统解码路径不同，需显式覆盖。
+        val inputBytesPerSample = inputBytesPerSampleOverride ?: bytesPerSampleForBitDepth(bitDepth)
         val usbBytesPerSample = target.usbBytesPerSample
         val usbBitResolution = target.usbBitResolution ?: (usbBytesPerSample * 8)
         UsbDiagnostics.i(
