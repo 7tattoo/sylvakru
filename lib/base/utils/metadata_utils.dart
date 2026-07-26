@@ -221,9 +221,19 @@ void sortSongList(int sortType, List<MyAudioMetadata> songList) {
   }
 }
 
+final _englishRegExp = RegExp(r'^[A-Za-z]');
+
 bool _isEnglish(String s) {
   final c = s[0];
-  return RegExp(r'^[A-Za-z]').hasMatch(c);
+  return _englishRegExp.hasMatch(c);
+}
+
+// 拼音转换开销大，排序时每次比较都转换会把整库排序拖到秒级，
+// 按字符串缓存转换结果（字符串数量以曲库元数据为上限）
+final _pinyinCache = <String, String>{};
+
+String _pinyinOf(String s) {
+  return _pinyinCache.putIfAbsent(s, () => PinyinHelper.getPinyinE(s));
 }
 
 int compareMixed(String a, String b) {
@@ -237,9 +247,7 @@ int compareMixed(String a, String b) {
     return a.toLowerCase().compareTo(b.toLowerCase());
   }
 
-  final pa = PinyinHelper.getPinyinE(a);
-  final pb = PinyinHelper.getPinyinE(b);
-  return pa.compareTo(pb);
+  return _pinyinOf(a).compareTo(_pinyinOf(b));
 }
 
 MyAudioMetadata? getFirstSong(List<MyAudioMetadata> songList) {
