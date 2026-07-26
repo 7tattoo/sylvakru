@@ -55,6 +55,8 @@ class Library {
   Map<String, MyAudioMetadata> id2Song = {};
 
   SongListManager songListManager = SongListManager();
+  // 所有歌曲页按专辑结构分组显示（全局记忆）
+  final useAlbumStructureNotifier = ValueNotifier(false);
 
   late final File _localFolderIdListFile;
   late final File _webdavFolderIdListFile;

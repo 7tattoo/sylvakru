@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:sylvakru/base/audio_handler.dart';
+import 'package:sylvakru/base/data/library.dart';
 import 'package:sylvakru/base/data/playlist.dart';
 import 'package:sylvakru/base/services/interaction.dart';
 import 'package:sylvakru/base/services/usb_audio_preferences.dart';
@@ -37,6 +38,10 @@ class Setting {
     playlistManager.useAlbumStructureNotifier.value =
         json['playlistsUseAlbumStructure'] as bool? ??
         playlistManager.useAlbumStructureNotifier.value;
+
+    library.useAlbumStructureNotifier.value =
+        json['songsUseAlbumStructure'] as bool? ??
+        library.useAlbumStructureNotifier.value;
 
     vibrationOnNoitifier.value =
         json['vibrationOn'] as bool? ?? vibrationOnNoitifier.value;
@@ -87,6 +92,8 @@ class Setting {
 
         'playlistsUseAlbumStructure':
             playlistManager.useAlbumStructureNotifier.value,
+
+        'songsUseAlbumStructure': library.useAlbumStructureNotifier.value,
 
         'vibrationOn': vibrationOnNoitifier.value,
         'language': localeNotifier.value?.languageCode,

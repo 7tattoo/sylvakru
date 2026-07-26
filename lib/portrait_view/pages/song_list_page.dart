@@ -121,10 +121,10 @@ extension _SongListPage on _SongListState {
               );
             },
           ),
-          if (playlist != null)
+          if (albumStructureSupported)
             ListTile(
               leading: ValueListenableBuilder(
-                valueListenable: playlistManager.useAlbumStructureNotifier,
+                valueListenable: albumStructureNotifier,
                 builder: (context, value, child) {
                   return ImageIcon(value ? albumImage : listImage);
                 },
@@ -142,7 +142,7 @@ extension _SongListPage on _SongListState {
                     MySwitch(
                       trueText: l10n.albums,
                       falseText: l10n.list,
-                      valueNotifier: playlistManager.useAlbumStructureNotifier,
+                      valueNotifier: albumStructureNotifier,
                       onToggleCallBack: () {
                         setting.save();
                       },
@@ -151,9 +151,9 @@ extension _SongListPage on _SongListState {
                 ),
               ),
             ),
-          if (playlist != null)
+          if (albumStructureSupported)
             ValueListenableBuilder(
-              valueListenable: playlistManager.useAlbumStructureNotifier,
+              valueListenable: albumStructureNotifier,
               builder: (context, value, child) {
                 if (!albumStructureActive) {
                   return SizedBox.shrink();
@@ -180,7 +180,7 @@ extension _SongListPage on _SongListState {
             ),
           if (!isRanking && !isRecently)
             ValueListenableBuilder(
-              valueListenable: playlistManager.useAlbumStructureNotifier,
+              valueListenable: albumStructureNotifier,
               builder: (context, value, child) {
                 // 专辑结构模式固定按专辑排序，隐藏歌曲排序入口
                 if (albumStructureActive) {
@@ -508,36 +508,47 @@ extension _SongListPage on _SongListState {
                           child: albumHeaderTile(currentSongList, start),
                         ),
                       ),
-                      // 收起/展开的高度过渡动画
-                      AnimatedSize(
+                      // 收起/展开动画：裁剪高度渐变，动画期间歌曲保持可见；
+                      // 完全收起后才卸载歌曲行，避免大歌单常驻构建开销
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(end: collapsed ? 0.0 : 1.0),
                         duration: Duration(milliseconds: 250),
                         curve: Curves.easeInOutCubic,
-                        alignment: Alignment.topCenter,
-                        child: collapsed
-                            ? SizedBox(width: double.infinity)
-                            : Column(
-                                children: [
-                                  for (
-                                    int i = start;
-                                    i < start + albumStructureGroupCount(start);
-                                    i++
-                                  )
-                                    SizedBox(
-                                      height: 60,
-                                      child: Center(
-                                        child: SongListTile(
-                                          index: i,
-                                          songList: currentSongList,
-                                          folder: folder,
-                                          playlist: playlist,
-                                          isRanking: isRanking,
-                                          isLibrary: isLibrary,
-                                          reorderable: false,
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                        builder: (context, factor, child) {
+                          if (factor <= 0) {
+                            return SizedBox(width: double.infinity);
+                          }
+                          return ClipRect(
+                            child: Align(
+                              alignment: Alignment.topCenter,
+                              heightFactor: factor,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Column(
+                          children: [
+                            for (
+                              int i = start;
+                              i < start + albumStructureGroupCount(start);
+                              i++
+                            )
+                              SizedBox(
+                                height: 60,
+                                child: Center(
+                                  child: SongListTile(
+                                    index: i,
+                                    songList: currentSongList,
+                                    folder: folder,
+                                    playlist: playlist,
+                                    isRanking: isRanking,
+                                    isLibrary: isLibrary,
+                                    reorderable: false,
+                                  ),
+                                ),
                               ),
+                          ],
+                        ),
                       ),
                     ],
                   );

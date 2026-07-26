@@ -153,8 +153,15 @@ class _SongListState extends State<SongList> {
         : title;
   }
 
+  // 歌单与所有歌曲页支持专辑结构显示，开关各自全局记忆
+  bool get albumStructureSupported => playlist != null || isLibrary;
+
+  ValueNotifier<bool> get albumStructureNotifier => playlist != null
+      ? playlistManager.useAlbumStructureNotifier
+      : library.useAlbumStructureNotifier;
+
   bool get albumStructureActive =>
-      playlist != null && playlistManager.useAlbumStructureNotifier.value;
+      albumStructureSupported && albumStructureNotifier.value;
 
   void updateSongList() {
     final value = textController.text;
@@ -273,8 +280,8 @@ class _SongListState extends State<SongList> {
     }
     rootVisibleNotifier?.addListener(updateHideOthers);
 
-    if (playlist != null) {
-      playlistManager.useAlbumStructureNotifier.addListener(updateSongList);
+    if (albumStructureSupported) {
+      albumStructureNotifier.addListener(updateSongList);
     }
 
     updateSongList();
@@ -354,8 +361,8 @@ class _SongListState extends State<SongList> {
 
     rootVisibleNotifier?.removeListener(updateHideOthers);
 
-    if (playlist != null) {
-      playlistManager.useAlbumStructureNotifier.removeListener(updateSongList);
+    if (albumStructureSupported) {
+      albumStructureNotifier.removeListener(updateSongList);
     }
 
     sortTypeNotifier.removeListener(updateSongList);

@@ -63,7 +63,7 @@ extension _SongListPanel on _SongListState {
             child: Opacity(
               opacity: hideOthers ? 0 : 1,
               child: ValueListenableBuilder(
-                valueListenable: playlistManager.useAlbumStructureNotifier,
+                valueListenable: albumStructureNotifier,
                 builder: (context, value, child) {
                   return label();
                 },
@@ -93,28 +93,34 @@ extension _SongListPanel on _SongListState {
                           height: 60,
                           child: albumHeaderRow(currentSongList, start),
                         ),
-                        // 收起/展开的高度过渡动画
-                        AnimatedSize(
+                        // 收起/展开动画：裁剪高度渐变，动画期间歌曲保持可见；
+                        // 完全收起后才卸载歌曲行，避免大列表常驻构建开销
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(end: collapsed ? 0.0 : 1.0),
                           duration: Duration(milliseconds: 250),
                           curve: Curves.easeInOutCubic,
-                          alignment: Alignment.topCenter,
-                          child: collapsed
-                              ? SizedBox(width: double.infinity)
-                              : Column(
-                                  children: [
-                                    for (
-                                      int i = start;
-                                      i <
-                                          start +
-                                              albumStructureGroupCount(start);
-                                      i++
-                                    )
-                                      SizedBox(
-                                        height: 60,
-                                        child: songListItem(i),
-                                      ),
-                                  ],
-                                ),
+                          builder: (context, factor, child) {
+                            if (factor <= 0) {
+                              return SizedBox(width: double.infinity);
+                            }
+                            return ClipRect(
+                              child: Align(
+                                alignment: Alignment.topCenter,
+                                heightFactor: factor,
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Column(
+                            children: [
+                              for (
+                                int i = start;
+                                i < start + albumStructureGroupCount(start);
+                                i++
+                              )
+                                SizedBox(height: 60, child: songListItem(i)),
+                            ],
+                          ),
                         ),
                       ],
                     );
@@ -192,7 +198,7 @@ extension _SongListPanel on _SongListState {
                         );
                       },
                     ),
-                    trailing: playlist == null
+                    trailing: !albumStructureSupported
                         ? null
                         : SizedBox(
                             width: 160,
@@ -200,8 +206,7 @@ extension _SongListPanel on _SongListState {
                               children: [
                                 Spacer(),
                                 ValueListenableBuilder(
-                                  valueListenable:
-                                      playlistManager.useAlbumStructureNotifier,
+                                  valueListenable: albumStructureNotifier,
                                   builder: (context, value, child) {
                                     if (!albumStructureActive) {
                                       return SizedBox.shrink();
@@ -231,8 +236,7 @@ extension _SongListPanel on _SongListState {
                                 MySwitch(
                                   trueText: l10n.albums,
                                   falseText: l10n.list,
-                                  valueNotifier:
-                                      playlistManager.useAlbumStructureNotifier,
+                                  valueNotifier: albumStructureNotifier,
                                   onToggleCallBack: () {
                                     setting.save();
                                   },
@@ -247,6 +251,7 @@ extension _SongListPanel on _SongListState {
                     listenable: Listenable.merge([
                       buttonColor.valueNotifier,
                       if (folder == null) songListManager.changeNotifier,
+                      if (albumStructureSupported) albumStructureNotifier,
                     ]),
                     builder: (_, _) {
                       final buttonStyle = ElevatedButton.styleFrom(
@@ -337,10 +342,12 @@ extension _SongListPanel on _SongListState {
                               ),
                             ],
 
-                            if (isLibrary &&
-                                    (sourceType == .local ||
-                                        sourceType == .webdav) ||
-                                folder != null) ...[
+                            if ((isLibrary &&
+                                        (sourceType == .local ||
+                                            sourceType == .webdav) ||
+                                    folder != null) &&
+                                // 专辑结构模式固定按专辑排序，隐藏排序入口
+                                !albumStructureActive) ...[
                               SizedBox(width: 15),
                               ElevatedButton(
                                 onPressed: () {
