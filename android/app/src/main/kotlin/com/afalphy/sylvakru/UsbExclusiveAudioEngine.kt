@@ -40,7 +40,53 @@ object UsbExclusiveNative {
         System.loadLibrary("sylvakru_usb_exclusive")
     }
 
-    external fun open(
+    // 传输实例句柄：native 侧原全局单例已实例化，本对象进程内持有单实例并随
+    // 进程存活（open/close 只切换会话状态，语义与原全局版一致）。
+    private val handle: Long = nativeCreate()
+
+    fun open(
+        fd: Int,
+        interfaceNumber: Int,
+        alternateSetting: Int,
+        endpointAddress: Int,
+        maxPacketSize: Int,
+        feedbackEndpointAddress: Int,
+        feedbackMaxPacketSize: Int,
+        interfaceAlreadyClaimed: Boolean,
+    ): String? = nativeOpen(
+        handle,
+        fd,
+        interfaceNumber,
+        alternateSetting,
+        endpointAddress,
+        maxPacketSize,
+        feedbackEndpointAddress,
+        feedbackMaxPacketSize,
+        interfaceAlreadyClaimed,
+    )
+
+    fun writePcm(bytes: ByteArray, length: Int): String? = nativeWritePcm(handle, bytes, length)
+
+    fun writeIsoPackets(bytes: ByteArray, packetLengths: IntArray, packetCount: Int): String? =
+        nativeWriteIsoPackets(handle, bytes, packetLengths, packetCount)
+
+    fun setIsoPacketSize(packetSize: Int) = nativeSetIsoPacketSize(handle, packetSize)
+
+    fun feedbackFramesPerPacketQ16(): Int = nativeFeedbackFramesPerPacketQ16(handle)
+
+    fun transportTelemetry(): LongArray = nativeTransportTelemetry(handle)
+
+    fun setMaxPendingOutputUrbs(maxPendingUrbs: Int) =
+        nativeSetMaxPendingOutputUrbs(handle, maxPendingUrbs)
+
+    fun flushOutput(): String? = nativeFlushOutput(handle)
+
+    fun close() = nativeClose(handle)
+
+    private external fun nativeCreate(): Long
+
+    private external fun nativeOpen(
+        handle: Long,
         fd: Int,
         interfaceNumber: Int,
         alternateSetting: Int,
@@ -51,21 +97,26 @@ object UsbExclusiveNative {
         interfaceAlreadyClaimed: Boolean,
     ): String?
 
-    external fun writePcm(bytes: ByteArray, length: Int): String?
+    private external fun nativeWritePcm(handle: Long, bytes: ByteArray, length: Int): String?
 
-    external fun writeIsoPackets(bytes: ByteArray, packetLengths: IntArray, packetCount: Int): String?
+    private external fun nativeWriteIsoPackets(
+        handle: Long,
+        bytes: ByteArray,
+        packetLengths: IntArray,
+        packetCount: Int,
+    ): String?
 
-    external fun setIsoPacketSize(packetSize: Int)
+    private external fun nativeSetIsoPacketSize(handle: Long, packetSize: Int)
 
-    external fun feedbackFramesPerPacketQ16(): Int
+    private external fun nativeFeedbackFramesPerPacketQ16(handle: Long): Int
 
-    external fun transportTelemetry(): LongArray
+    private external fun nativeTransportTelemetry(handle: Long): LongArray
 
-    external fun setMaxPendingOutputUrbs(maxPendingUrbs: Int)
+    private external fun nativeSetMaxPendingOutputUrbs(handle: Long, maxPendingUrbs: Int)
 
-    external fun flushOutput(): String?
+    private external fun nativeFlushOutput(handle: Long): String?
 
-    external fun close()
+    private external fun nativeClose(handle: Long)
 }
 
 private const val NATIVE_USB_EXCLUSIVE_STREAMING_ENABLED = true

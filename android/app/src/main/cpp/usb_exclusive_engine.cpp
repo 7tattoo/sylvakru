@@ -29,24 +29,33 @@ struct PendingUrb {
     bool feedback;
 };
 
-std::mutex g_mutex;
-int g_fd = -1;
-int g_interface_number = -1;
-int g_endpoint_address = -1;
-int g_max_packet_size = 0;
-int g_iso_packet_size = 0;
-int g_feedback_endpoint_address = 0;
-int g_feedback_packet_size = 0;
-int g_feedback_frames_per_packet_q16 = 0;
-int g_feedback_log_count = 0;
-int g_write_log_count = 0;
-long long g_total_bytes = 0;
-long long g_total_urbs = 0;
-long long g_total_iso_packets = 0;
-long long g_last_stats_ms = 0;
-long long g_iso_error_count = 0;
-int g_max_pending_urbs = kDefaultMaxPendingUrbs;
-std::vector<PendingUrb> g_pending_urbs;
+// usbdevfs 传输实例：原全局单例状态收拢为句柄（Kotlin UsbExclusiveNative
+// 进程内持有单实例；实例化后核心逻辑可被未来多实例/桌面后端复用）。
+// 各字段语义与原 g_* 全局逐一对应，行为不变。
+struct Transport {
+    std::mutex mutex;
+    int fd = -1;
+    int interface_number = -1;
+    int endpoint_address = -1;
+    int max_packet_size = 0;
+    int iso_packet_size = 0;
+    int feedback_endpoint_address = 0;
+    int feedback_packet_size = 0;
+    int feedback_frames_per_packet_q16 = 0;
+    int feedback_log_count = 0;
+    int write_log_count = 0;
+    long long total_bytes = 0;
+    long long total_urbs = 0;
+    long long total_iso_packets = 0;
+    long long last_stats_ms = 0;
+    long long iso_error_count = 0;
+    int max_pending_urbs = kDefaultMaxPendingUrbs;
+    std::vector<PendingUrb> pending_urbs;
+};
+
+Transport* fromHandle(jlong handle) {
+    return reinterpret_cast<Transport*>(handle);
+}
 
 long long monotonicMillis() {
     timespec now = {};
@@ -75,14 +84,14 @@ void freePendingUrb(PendingUrb pending) {
     free(pending.urb);
 }
 
-std::string submitFeedbackLocked();
+std::string submitFeedbackLocked(Transport& transport);
 
-void logCompletedUrb(PendingUrb pending) {
+void logCompletedUrb(Transport& transport, PendingUrb pending) {
     if (pending.feedback) {
         return;
     }
     if (pending.urb->status != 0) {
-        ++g_iso_error_count;
+        ++transport.iso_error_count;
         __android_log_print(
             ANDROID_LOG_WARN,
             kTag,
@@ -93,7 +102,7 @@ void logCompletedUrb(PendingUrb pending) {
     }
     for (int i = 0; i < pending.packets; ++i) {
         if (pending.urb->iso_frame_desc[i].status != 0) {
-            ++g_iso_error_count;
+            ++transport.iso_error_count;
             __android_log_print(
                 ANDROID_LOG_WARN,
                 kTag,
@@ -107,7 +116,7 @@ void logCompletedUrb(PendingUrb pending) {
     }
 }
 
-void handleFeedbackUrb(PendingUrb pending) {
+void handleFeedbackUrb(Transport& transport, PendingUrb pending) {
     if (pending.urb->status != 0 || pending.packets <= 0) {
         if (pending.urb->status != 0) {
             __android_log_print(
@@ -123,7 +132,7 @@ void handleFeedbackUrb(PendingUrb pending) {
 
     const auto& frame = pending.urb->iso_frame_desc[0];
     if (frame.status != 0 || frame.actual_length < 3) {
-        if (frame.status != 0 && g_feedback_log_count < 8) {
+        if (frame.status != 0 && transport.feedback_log_count < 8) {
             __android_log_print(
                 ANDROID_LOG_WARN,
                 kTag,
@@ -149,10 +158,10 @@ void handleFeedbackUrb(PendingUrb pending) {
     }
 
     if (q16 > 0) {
-        g_feedback_frames_per_packet_q16 = q16;
+        transport.feedback_frames_per_packet_q16 = q16;
     }
-    if (g_feedback_log_count < 12) {
-        ++g_feedback_log_count;
+    if (transport.feedback_log_count < 12) {
+        ++transport.feedback_log_count;
         __android_log_print(
             ANDROID_LOG_INFO,
             kTag,
@@ -164,24 +173,24 @@ void handleFeedbackUrb(PendingUrb pending) {
     }
 }
 
-std::string reapOneLocked(bool blocking, bool* reaped = nullptr) {
-    if (g_pending_urbs.empty()) {
+std::string reapOneLocked(Transport& transport, bool blocking, bool* reaped = nullptr) {
+    if (transport.pending_urbs.empty()) {
         return {};
     }
 
     void* completed = nullptr;
     const int request = blocking ? USBDEVFS_REAPURB : USBDEVFS_REAPURBNDELAY;
-    if (ioctl(g_fd, request, &completed) < 0) {
+    if (ioctl(transport.fd, request, &completed) < 0) {
         if (!blocking && errno == EAGAIN) {
             return {};
         }
         return errorMessage(blocking ? "USBDEVFS_REAPURB" : "USBDEVFS_REAPURBNDELAY");
     }
     auto found = std::find_if(
-        g_pending_urbs.begin(),
-        g_pending_urbs.end(),
+        transport.pending_urbs.begin(),
+        transport.pending_urbs.end(),
         [completed](const PendingUrb& pending) { return pending.urb == completed; });
-    if (found == g_pending_urbs.end()) {
+    if (found == transport.pending_urbs.end()) {
         return "USBDEVFS_REAPURB returned an unknown URB.";
     }
     if (reaped != nullptr) {
@@ -190,14 +199,16 @@ std::string reapOneLocked(bool blocking, bool* reaped = nullptr) {
 
     const PendingUrb completed_pending = *found;
     if (completed_pending.feedback) {
-        handleFeedbackUrb(completed_pending);
+        handleFeedbackUrb(transport, completed_pending);
     } else {
-        logCompletedUrb(completed_pending);
+        logCompletedUrb(transport, completed_pending);
     }
     freePendingUrb(completed_pending);
-    g_pending_urbs.erase(found);
-    if (completed_pending.feedback && g_fd >= 0 && g_feedback_endpoint_address != 0) {
-        const auto feedback_error = submitFeedbackLocked();
+    transport.pending_urbs.erase(found);
+    if (completed_pending.feedback &&
+        transport.fd >= 0 &&
+        transport.feedback_endpoint_address != 0) {
+        const auto feedback_error = submitFeedbackLocked(transport);
         if (!feedback_error.empty()) {
             return feedback_error;
         }
@@ -205,43 +216,44 @@ std::string reapOneLocked(bool blocking, bool* reaped = nullptr) {
     return {};
 }
 
-std::string reapCompletedLocked() {
+std::string reapCompletedLocked(Transport& transport) {
     std::string error;
     // 非阻塞收回全部已完成 URB。之前每次只收一个，切歌排空轮询看到的
     // pending 数远落后于实际播放进度，排空永远等不到 0 只能超时硬关，
     // DISCARDURB 掐断残留音频出小音爆。
-    while (error.empty() && !g_pending_urbs.empty()) {
+    while (error.empty() && !transport.pending_urbs.empty()) {
         bool reaped = false;
-        error = reapOneLocked(false, &reaped);
+        error = reapOneLocked(transport, false, &reaped);
         if (!reaped) {
             break;
         }
     }
-    while (error.empty() && static_cast<int>(g_pending_urbs.size()) >= g_max_pending_urbs) {
-        error = reapOneLocked(true);
+    while (error.empty() &&
+           static_cast<int>(transport.pending_urbs.size()) >= transport.max_pending_urbs) {
+        error = reapOneLocked(transport, true);
     }
     return error;
 }
 
-void discardPendingLocked() {
-    for (const auto& pending : g_pending_urbs) {
-        ioctl(g_fd, USBDEVFS_DISCARDURB, pending.urb);
+void discardPendingLocked(Transport& transport) {
+    for (const auto& pending : transport.pending_urbs) {
+        ioctl(transport.fd, USBDEVFS_DISCARDURB, pending.urb);
     }
 }
 
 // seek/暂停时丢弃在途输出 URB：DISCARDURB 后仍要通过 REAPURB 收回并释放；
 // 反馈 URB 不丢（收回后 reapOneLocked 会自动重挂）。
-std::string flushOutputLocked() {
-    if (g_fd < 0) {
+std::string flushOutputLocked(Transport& transport) {
+    if (transport.fd < 0) {
         return {};
     }
-    for (const auto& pending : g_pending_urbs) {
+    for (const auto& pending : transport.pending_urbs) {
         if (!pending.feedback) {
-            ioctl(g_fd, USBDEVFS_DISCARDURB, pending.urb);
+            ioctl(transport.fd, USBDEVFS_DISCARDURB, pending.urb);
         }
     }
-    const auto has_output = [] {
-        for (const auto& pending : g_pending_urbs) {
+    const auto has_output = [&transport] {
+        for (const auto& pending : transport.pending_urbs) {
             if (!pending.feedback) {
                 return true;
             }
@@ -250,28 +262,28 @@ std::string flushOutputLocked() {
     };
     std::string error;
     while (error.empty() && has_output()) {
-        error = reapOneLocked(true);
+        error = reapOneLocked(transport, true);
     }
     return error;
 }
 
-void freeAllPendingLocked() {
-    for (auto& pending : g_pending_urbs) {
+void freeAllPendingLocked(Transport& transport) {
+    for (auto& pending : transport.pending_urbs) {
         freePendingUrb(pending);
     }
-    g_pending_urbs.clear();
+    transport.pending_urbs.clear();
 }
 
-std::string claimInterfaceLocked() {
+std::string claimInterfaceLocked(Transport& transport) {
     usbdevfs_disconnect_claim disconnect_claim = {};
-    disconnect_claim.interface = static_cast<unsigned int>(g_interface_number);
+    disconnect_claim.interface = static_cast<unsigned int>(transport.interface_number);
 
-    if (ioctl(g_fd, USBDEVFS_DISCONNECT_CLAIM, &disconnect_claim) == 0) {
+    if (ioctl(transport.fd, USBDEVFS_DISCONNECT_CLAIM, &disconnect_claim) == 0) {
         __android_log_print(
             ANDROID_LOG_INFO,
             kTag,
             "USBDEVFS_DISCONNECT_CLAIM ok interface=%d",
-            g_interface_number);
+            transport.interface_number);
         return {};
     }
 
@@ -280,23 +292,23 @@ std::string claimInterfaceLocked() {
         ANDROID_LOG_WARN,
         kTag,
         "USBDEVFS_DISCONNECT_CLAIM failed interface=%d: %s",
-        g_interface_number,
+        transport.interface_number,
         strerror(disconnect_claim_errno));
 
-    if (ioctl(g_fd, USBDEVFS_CLAIMINTERFACE, &g_interface_number) == 0) {
+    if (ioctl(transport.fd, USBDEVFS_CLAIMINTERFACE, &transport.interface_number) == 0) {
         __android_log_print(
             ANDROID_LOG_INFO,
             kTag,
             "USBDEVFS_CLAIMINTERFACE ok interface=%d",
-            g_interface_number);
+            transport.interface_number);
         return {};
     }
 
     return errorMessage("USBDEVFS_CLAIMINTERFACE");
 }
 
-void closeLocked() {
-    if (g_fd < 0) {
+void closeLocked(Transport& transport) {
+    if (transport.fd < 0) {
         return;
     }
 
@@ -304,50 +316,51 @@ void closeLocked() {
         ANDROID_LOG_INFO,
         kTag,
         "closing exclusive USB fd=%d interface=%d endpoint=0x%x pendingUrbs=%zu",
-        g_fd,
-        g_interface_number,
-        g_endpoint_address,
-        g_pending_urbs.size());
-    discardPendingLocked();
-    if (g_interface_number >= 0) {
+        transport.fd,
+        transport.interface_number,
+        transport.endpoint_address,
+        transport.pending_urbs.size());
+    discardPendingLocked(transport);
+    if (transport.interface_number >= 0) {
         // UAC 标准停流信号：先回 alt 0 再释放接口。少了这步 Macaron 从
         // native DSD 退出时固件停在 DSD 状态，后续 PCM 会话声道错乱（单声道）
         // 且反馈端点一直报上一个会话的速率，只能拔插恢复。
         usbdevfs_setinterface set_interface = {};
-        set_interface.interface = static_cast<unsigned int>(g_interface_number);
+        set_interface.interface = static_cast<unsigned int>(transport.interface_number);
         set_interface.altsetting = 0;
-        ioctl(g_fd, USBDEVFS_SETINTERFACE, &set_interface);
-        ioctl(g_fd, USBDEVFS_RELEASEINTERFACE, &g_interface_number);
+        ioctl(transport.fd, USBDEVFS_SETINTERFACE, &set_interface);
+        ioctl(transport.fd, USBDEVFS_RELEASEINTERFACE, &transport.interface_number);
     }
-    close(g_fd);
-    freeAllPendingLocked();
-    g_fd = -1;
-    g_interface_number = -1;
-    g_endpoint_address = -1;
-    g_max_packet_size = 0;
-    g_iso_packet_size = 0;
-    g_feedback_endpoint_address = 0;
-    g_feedback_packet_size = 0;
-    g_feedback_frames_per_packet_q16 = 0;
-    g_feedback_log_count = 0;
-    g_write_log_count = 0;
-    g_total_bytes = 0;
-    g_total_urbs = 0;
-    g_total_iso_packets = 0;
-    g_last_stats_ms = 0;
-    g_iso_error_count = 0;
-    g_max_pending_urbs = kDefaultMaxPendingUrbs;
+    close(transport.fd);
+    freeAllPendingLocked(transport);
+    transport.fd = -1;
+    transport.interface_number = -1;
+    transport.endpoint_address = -1;
+    transport.max_packet_size = 0;
+    transport.iso_packet_size = 0;
+    transport.feedback_endpoint_address = 0;
+    transport.feedback_packet_size = 0;
+    transport.feedback_frames_per_packet_q16 = 0;
+    transport.feedback_log_count = 0;
+    transport.write_log_count = 0;
+    transport.total_bytes = 0;
+    transport.total_urbs = 0;
+    transport.total_iso_packets = 0;
+    transport.last_stats_ms = 0;
+    transport.iso_error_count = 0;
+    transport.max_pending_urbs = kDefaultMaxPendingUrbs;
 }
 
 std::string submitIsoPacketsLocked(
+    Transport& transport,
     const uint8_t* data,
     int length,
     const int* packet_lengths,
     int packet_count) {
-    if (g_fd < 0) {
+    if (transport.fd < 0) {
         return "USB exclusive device is not open.";
     }
-    if (g_endpoint_address < 0 || g_max_packet_size <= 0) {
+    if (transport.endpoint_address < 0 || transport.max_packet_size <= 0) {
         return "USB exclusive endpoint is not configured.";
     }
     if (data == nullptr || length <= 0 || packet_lengths == nullptr || packet_count <= 0) {
@@ -357,7 +370,7 @@ std::string submitIsoPacketsLocked(
     const int packets = std::min(packet_count, kMaxIsoPacketsPerUrb);
     int described_length = 0;
     for (int i = 0; i < packets; ++i) {
-        if (packet_lengths[i] <= 0 || packet_lengths[i] > g_max_packet_size) {
+        if (packet_lengths[i] <= 0 || packet_lengths[i] > transport.max_packet_size) {
             return "USB exclusive iso packet length is invalid.";
         }
         described_length += packet_lengths[i];
@@ -378,7 +391,7 @@ std::string submitIsoPacketsLocked(
 
     memcpy(buffer, data, length);
     urb->type = USBDEVFS_URB_TYPE_ISO;
-    urb->endpoint = static_cast<unsigned char>(g_endpoint_address);
+    urb->endpoint = static_cast<unsigned char>(transport.endpoint_address);
     urb->status = 0;
     urb->flags = USBDEVFS_URB_ISO_ASAP;
     urb->buffer = buffer;
@@ -389,39 +402,40 @@ std::string submitIsoPacketsLocked(
         urb->iso_frame_desc[i].length = packet_lengths[i];
     }
 
-    if (ioctl(g_fd, USBDEVFS_SUBMITURB, urb) < 0) {
+    if (ioctl(transport.fd, USBDEVFS_SUBMITURB, urb) < 0) {
         const auto error = errorMessage("USBDEVFS_SUBMITURB");
         free(buffer);
         free(urb);
         return error;
     }
 
-    g_pending_urbs.push_back(PendingUrb{urb, buffer, length, packets, false});
-    g_total_bytes += length;
-    g_total_urbs += 1;
-    g_total_iso_packets += packets;
+    transport.pending_urbs.push_back(PendingUrb{urb, buffer, length, packets, false});
+    transport.total_bytes += length;
+    transport.total_urbs += 1;
+    transport.total_iso_packets += packets;
     const long long now_ms = monotonicMillis();
-    if (g_last_stats_ms == 0) {
-        g_last_stats_ms = now_ms;
-    } else if (now_ms - g_last_stats_ms >= 1000) {
+    if (transport.last_stats_ms == 0) {
+        transport.last_stats_ms = now_ms;
+    } else if (now_ms - transport.last_stats_ms >= 1000) {
         __android_log_print(
             ANDROID_LOG_INFO,
             kTag,
             "USB write stats bytes=%lld urbs=%lld isoPackets=%lld pendingUrbs=%zu isoPacketSize=%d endpoint=0x%x",
-            g_total_bytes,
-            g_total_urbs,
-            g_total_iso_packets,
-            g_pending_urbs.size(),
-            g_iso_packet_size,
-            g_endpoint_address);
-        g_last_stats_ms = now_ms;
+            transport.total_bytes,
+            transport.total_urbs,
+            transport.total_iso_packets,
+            transport.pending_urbs.size(),
+            transport.iso_packet_size,
+            transport.endpoint_address);
+        transport.last_stats_ms = now_ms;
     }
-    return reapCompletedLocked();
+    return reapCompletedLocked(transport);
 }
 
-std::string submitIsoChunkLocked(const uint8_t* data, int length) {
-    const int iso_packet_size =
-        g_iso_packet_size > 0 ? std::min(g_iso_packet_size, g_max_packet_size) : g_max_packet_size;
+std::string submitIsoChunkLocked(Transport& transport, const uint8_t* data, int length) {
+    const int iso_packet_size = transport.iso_packet_size > 0
+        ? std::min(transport.iso_packet_size, transport.max_packet_size)
+        : transport.max_packet_size;
     const int packets = std::max(
         1,
         std::min(kMaxIsoPacketsPerUrb, (length + iso_packet_size - 1) / iso_packet_size));
@@ -431,16 +445,18 @@ std::string submitIsoChunkLocked(const uint8_t* data, int length) {
         packet_lengths[i] = std::min(iso_packet_size, remaining);
         remaining -= packet_lengths[i];
     }
-    return submitIsoPacketsLocked(data, length, packet_lengths, packets);
+    return submitIsoPacketsLocked(transport, data, length, packet_lengths, packets);
 }
 
-std::string submitFeedbackLocked() {
-    if (g_fd < 0 || g_feedback_endpoint_address == 0 || g_feedback_packet_size <= 0) {
+std::string submitFeedbackLocked(Transport& transport) {
+    if (transport.fd < 0 ||
+        transport.feedback_endpoint_address == 0 ||
+        transport.feedback_packet_size <= 0) {
         return {};
     }
 
     const int packets = 1;
-    const int length = std::min(4, std::max(3, g_feedback_packet_size));
+    const int length = std::min(4, std::max(3, transport.feedback_packet_size));
     const size_t urb_size =
         sizeof(usbdevfs_urb) + sizeof(usbdevfs_iso_packet_desc) * packets;
     auto* urb = static_cast<usbdevfs_urb*>(calloc(1, urb_size));
@@ -452,7 +468,7 @@ std::string submitFeedbackLocked() {
     }
 
     urb->type = USBDEVFS_URB_TYPE_ISO;
-    urb->endpoint = static_cast<unsigned char>(g_feedback_endpoint_address);
+    urb->endpoint = static_cast<unsigned char>(transport.feedback_endpoint_address);
     urb->status = 0;
     urb->flags = USBDEVFS_URB_ISO_ASAP;
     urb->buffer = buffer;
@@ -460,23 +476,42 @@ std::string submitFeedbackLocked() {
     urb->number_of_packets = packets;
     urb->iso_frame_desc[0].length = length;
 
-    if (ioctl(g_fd, USBDEVFS_SUBMITURB, urb) < 0) {
+    if (ioctl(transport.fd, USBDEVFS_SUBMITURB, urb) < 0) {
         const auto error = errorMessage("USBDEVFS_SUBMITURB feedback");
         free(buffer);
         free(urb);
         return error;
     }
 
-    g_pending_urbs.push_back(PendingUrb{urb, buffer, length, packets, true});
+    transport.pending_urbs.push_back(PendingUrb{urb, buffer, length, packets, true});
     return {};
 }
 
 }  // namespace
 
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeCreate(JNIEnv*, jobject) {
+    return reinterpret_cast<jlong>(new Transport());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeDestroy(JNIEnv*, jobject, jlong handle) {
+    auto* transport = fromHandle(handle);
+    if (transport == nullptr) {
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(transport->mutex);
+        closeLocked(*transport);
+    }
+    delete transport;
+}
+
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_open(
+Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeOpen(
     JNIEnv* env,
     jobject,
+    jlong handle,
     jint fd,
     jint interface_number,
     jint alternate_setting,
@@ -485,8 +520,12 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_open(
     jint feedback_endpoint_address,
     jint feedback_max_packet_size,
     jboolean interface_already_claimed) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    closeLocked();
+    auto* transport = fromHandle(handle);
+    if (transport == nullptr) {
+        return nullableError(env, "USB exclusive transport handle is invalid.");
+    }
+    std::lock_guard<std::mutex> lock(transport->mutex);
+    closeLocked(*transport);
 
     __android_log_print(
         ANDROID_LOG_INFO,
@@ -503,23 +542,23 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_open(
         return nullableError(env, errorMessage("dup"));
     }
 
-    g_fd = duplicated;
-    g_interface_number = interface_number;
-    g_endpoint_address = endpoint_address;
-    g_max_packet_size = max_packet_size;
-    g_feedback_endpoint_address = feedback_endpoint_address;
-    g_feedback_packet_size = feedback_max_packet_size;
+    transport->fd = duplicated;
+    transport->interface_number = interface_number;
+    transport->endpoint_address = endpoint_address;
+    transport->max_packet_size = max_packet_size;
+    transport->feedback_endpoint_address = feedback_endpoint_address;
+    transport->feedback_packet_size = feedback_max_packet_size;
 
     if (interface_already_claimed == JNI_TRUE) {
         __android_log_print(
             ANDROID_LOG_INFO,
             kTag,
             "USB interface already claimed by UsbDeviceConnection interface=%d",
-            g_interface_number);
+            transport->interface_number);
     } else {
-        const auto claim_error = claimInterfaceLocked();
+        const auto claim_error = claimInterfaceLocked(*transport);
         if (!claim_error.empty()) {
-            closeLocked();
+            closeLocked(*transport);
             return nullableError(env, claim_error);
         }
     }
@@ -527,9 +566,9 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_open(
     usbdevfs_setinterface set_interface = {};
     set_interface.interface = interface_number;
     set_interface.altsetting = alternate_setting;
-    if (ioctl(g_fd, USBDEVFS_SETINTERFACE, &set_interface) < 0) {
+    if (ioctl(transport->fd, USBDEVFS_SETINTERFACE, &set_interface) < 0) {
         const auto error = errorMessage("USBDEVFS_SETINTERFACE");
-        closeLocked();
+        closeLocked(*transport);
         return nullableError(env, error);
     }
     __android_log_print(
@@ -539,8 +578,8 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_open(
         interface_number,
         alternate_setting);
 
-    if (g_feedback_endpoint_address != 0 && g_feedback_packet_size > 0) {
-        const auto feedback_error = submitFeedbackLocked();
+    if (transport->feedback_endpoint_address != 0 && transport->feedback_packet_size > 0) {
+        const auto feedback_error = submitFeedbackLocked(*transport);
         if (!feedback_error.empty()) {
             __android_log_print(
                 ANDROID_LOG_WARN,
@@ -552,8 +591,8 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_open(
                 ANDROID_LOG_INFO,
                 kTag,
                 "USB feedback endpoint armed endpoint=0x%x maxPacket=%d",
-                g_feedback_endpoint_address,
-                g_feedback_packet_size);
+                transport->feedback_endpoint_address,
+                transport->feedback_packet_size);
         }
     }
 
@@ -561,11 +600,16 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_open(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_writePcm(
+Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeWritePcm(
     JNIEnv* env,
     jobject,
+    jlong handle,
     jbyteArray bytes,
     jint length) {
+    auto* transport = fromHandle(handle);
+    if (transport == nullptr) {
+        return nullableError(env, "USB exclusive transport handle is invalid.");
+    }
     if (bytes == nullptr || length <= 0) {
         return nullptr;
     }
@@ -580,38 +624,44 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_writePcm(
     std::string error;
     int offset = 0;
     {
-        std::lock_guard<std::mutex> lock(g_mutex);
-        const int iso_packet_size =
-            g_iso_packet_size > 0 ? std::min(g_iso_packet_size, g_max_packet_size) : g_max_packet_size;
+        std::lock_guard<std::mutex> lock(transport->mutex);
+        const int iso_packet_size = transport->iso_packet_size > 0
+            ? std::min(transport->iso_packet_size, transport->max_packet_size)
+            : transport->max_packet_size;
         const int max_chunk = std::max(1, iso_packet_size * kMaxIsoPacketsPerUrb);
         while (offset < safe_length && error.empty()) {
             const int chunk = std::min(max_chunk, safe_length - offset);
-            error = submitIsoChunkLocked(input + offset, chunk);
+            error = submitIsoChunkLocked(*transport, input + offset, chunk);
             offset += chunk;
         }
     }
 
     env->ReleaseByteArrayElements(bytes, reinterpret_cast<jbyte*>(input), JNI_ABORT);
-    if (error.empty() && g_write_log_count < 5) {
-        ++g_write_log_count;
+    if (error.empty() && transport->write_log_count < 5) {
+        ++transport->write_log_count;
         __android_log_print(
             ANDROID_LOG_DEBUG,
             kTag,
             "writePcm submitted %d bytes to endpoint=0x%x isoPacket=%d",
             safe_length,
-            g_endpoint_address,
-            g_iso_packet_size);
+            transport->endpoint_address,
+            transport->iso_packet_size);
     }
     return nullableError(env, error);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_writeIsoPackets(
+Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeWriteIsoPackets(
     JNIEnv* env,
     jobject,
+    jlong handle,
     jbyteArray bytes,
     jintArray packet_lengths,
     jint packet_count) {
+    auto* transport = fromHandle(handle);
+    if (transport == nullptr) {
+        return nullableError(env, "USB exclusive transport handle is invalid.");
+    }
     if (bytes == nullptr || packet_lengths == nullptr || packet_count <= 0) {
         return nullptr;
     }
@@ -645,52 +695,64 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_writeIsoPackets(
 
     std::string error;
     {
-        std::lock_guard<std::mutex> lock(g_mutex);
-        error = submitIsoPacketsLocked(input, safe_length, stack_lengths, safe_packet_count);
+        std::lock_guard<std::mutex> lock(transport->mutex);
+        error = submitIsoPacketsLocked(
+            *transport, input, safe_length, stack_lengths, safe_packet_count);
     }
 
     env->ReleaseByteArrayElements(bytes, reinterpret_cast<jbyte*>(input), JNI_ABORT);
-    if (error.empty() && g_write_log_count < 5) {
-        ++g_write_log_count;
+    if (error.empty() && transport->write_log_count < 5) {
+        ++transport->write_log_count;
         __android_log_print(
             ANDROID_LOG_DEBUG,
             kTag,
             "writeIsoPackets submitted %d bytes packets=%d endpoint=0x%x",
             safe_length,
             safe_packet_count,
-            g_endpoint_address);
+            transport->endpoint_address);
     }
     return nullableError(env, error);
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_feedbackFramesPerPacketQ16(JNIEnv*, jobject) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    return g_feedback_frames_per_packet_q16;
+Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeFeedbackFramesPerPacketQ16(
+    JNIEnv*,
+    jobject,
+    jlong handle) {
+    auto* transport = fromHandle(handle);
+    if (transport == nullptr) {
+        return 0;
+    }
+    std::lock_guard<std::mutex> lock(transport->mutex);
+    return transport->feedback_frames_per_packet_q16;
 }
 
 extern "C" JNIEXPORT jlongArray JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_transportTelemetry(JNIEnv* env, jobject) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    if (g_fd >= 0) {
-        reapCompletedLocked();
-    }
-
-    long long pending_iso_packets = 0;
-    long long pending_output_urbs = 0;
-    for (const auto& pending : g_pending_urbs) {
-        if (!pending.feedback) {
-            pending_iso_packets += pending.packets;
-            ++pending_output_urbs;
+Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeTransportTelemetry(
+    JNIEnv* env,
+    jobject,
+    jlong handle) {
+    auto* transport = fromHandle(handle);
+    jlong values[] = {0, 0, 0, 0};
+    if (transport != nullptr) {
+        std::lock_guard<std::mutex> lock(transport->mutex);
+        if (transport->fd >= 0) {
+            reapCompletedLocked(*transport);
         }
-    }
 
-    const jlong values[] = {
-        static_cast<jlong>(pending_iso_packets),
-        static_cast<jlong>(g_total_iso_packets),
-        static_cast<jlong>(pending_output_urbs),
-        static_cast<jlong>(g_iso_error_count),
-    };
+        long long pending_iso_packets = 0;
+        long long pending_output_urbs = 0;
+        for (const auto& pending : transport->pending_urbs) {
+            if (!pending.feedback) {
+                pending_iso_packets += pending.packets;
+                ++pending_output_urbs;
+            }
+        }
+        values[0] = static_cast<jlong>(pending_iso_packets);
+        values[1] = static_cast<jlong>(transport->total_iso_packets);
+        values[2] = static_cast<jlong>(pending_output_urbs);
+        values[3] = static_cast<jlong>(transport->iso_error_count);
+    }
     jlongArray result = env->NewLongArray(4);
     if (result != nullptr) {
         env->SetLongArrayRegion(result, 0, 4, values);
@@ -699,39 +761,57 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_transportTelemetry(JNIEnv* env, job
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_setIsoPacketSize(
+Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeSetIsoPacketSize(
     JNIEnv*,
     jobject,
+    jlong handle,
     jint packet_size) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    g_iso_packet_size = std::max(0, std::min(static_cast<int>(packet_size), g_max_packet_size));
+    auto* transport = fromHandle(handle);
+    if (transport == nullptr) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(transport->mutex);
+    transport->iso_packet_size =
+        std::max(0, std::min(static_cast<int>(packet_size), transport->max_packet_size));
     __android_log_print(
         ANDROID_LOG_INFO,
         kTag,
         "iso packet size set to %d bytes",
-        g_iso_packet_size);
+        transport->iso_packet_size);
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_setMaxPendingOutputUrbs(
+Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeSetMaxPendingOutputUrbs(
     JNIEnv*,
     jobject,
+    jlong handle,
     jint max_pending_urbs) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    g_max_pending_urbs = std::max(
+    auto* transport = fromHandle(handle);
+    if (transport == nullptr) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(transport->mutex);
+    transport->max_pending_urbs = std::max(
         kDefaultMaxPendingUrbs,
         std::min(static_cast<int>(max_pending_urbs), kAbsoluteMaxPendingUrbs));
     __android_log_print(
         ANDROID_LOG_INFO,
         kTag,
         "max pending output URBs set to %d",
-        g_max_pending_urbs);
+        transport->max_pending_urbs);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_flushOutput(JNIEnv* env, jobject) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    const std::string error = flushOutputLocked();
+Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeFlushOutput(
+    JNIEnv* env,
+    jobject,
+    jlong handle) {
+    auto* transport = fromHandle(handle);
+    if (transport == nullptr) {
+        return nullptr;
+    }
+    std::lock_guard<std::mutex> lock(transport->mutex);
+    const std::string error = flushOutputLocked(*transport);
     if (error.empty()) {
         return nullptr;
     }
@@ -739,7 +819,11 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_flushOutput(JNIEnv* env, jobject) {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_close(JNIEnv*, jobject) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    closeLocked();
+Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeClose(JNIEnv*, jobject, jlong handle) {
+    auto* transport = fromHandle(handle);
+    if (transport == nullptr) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(transport->mutex);
+    closeLocked(*transport);
 }
