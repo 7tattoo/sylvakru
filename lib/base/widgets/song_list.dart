@@ -104,8 +104,11 @@ class _SongListState extends State<SongList> {
   final currentSongListNotifier = ValueNotifier<List<MyAudioMetadata>>([]);
 
   // 专辑结构显示行：>=0 为 currentSongList 中的歌曲索引，
-  // 负值 -(i+1) 表示从歌曲索引 i 开始的一段专辑的专辑头
+  // 负值 -(i+1) 表示从歌曲索引 i 开始的一段专辑的专辑头；
+  // 收起的专辑不含歌曲行，行高统一 60，供定位换算使用
   List<int> albumStructureRows = [];
+  // 各专辑段首曲在 currentSongList 中的索引（含收起的专辑），供分组渲染使用
+  List<int> albumGroupStarts = [];
   // 专辑结构模式中被收起的专辑
   final collapsedAlbums = <String>{};
 
@@ -164,12 +167,14 @@ class _SongListState extends State<SongList> {
     }
 
     albumStructureRows = [];
+    albumGroupStarts = [];
     if (albumStructureActive) {
       String? lastAlbum;
       for (int i = 0; i < filteredSongList.length; i++) {
         final album = getAlbum(filteredSongList[i]);
         if (album != lastAlbum) {
           lastAlbum = album;
+          albumGroupStarts.add(i);
           albumStructureRows.add(-i - 1);
         }
         if (!collapsedAlbums.contains(album)) {

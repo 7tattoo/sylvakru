@@ -494,26 +494,52 @@ extension _SongListPage on _SongListState {
           valueListenable: currentSongListNotifier,
           builder: (context, currentSongList, child) {
             if (albumStructureActive) {
-              return SliverFixedExtentList.builder(
-                itemExtent: 60,
-                itemCount: albumStructureRows.length,
+              return SliverList.builder(
+                itemCount: albumGroupStarts.length,
                 itemBuilder: (context, index) {
-                  final row = albumStructureRows[index];
-                  if (row < 0) {
-                    return Center(
-                      child: albumHeaderTile(currentSongList, -row - 1),
-                    );
-                  }
-                  return Center(
-                    child: SongListTile(
-                      index: row,
-                      songList: currentSongList,
-                      folder: folder,
-                      playlist: playlist,
-                      isRanking: isRanking,
-                      isLibrary: isLibrary,
-                      reorderable: false,
-                    ),
+                  final start = albumGroupStarts[index];
+                  final album = getAlbum(currentSongList[start]);
+                  final collapsed = collapsedAlbums.contains(album);
+                  return Column(
+                    children: [
+                      SizedBox(
+                        height: 60,
+                        child: Center(
+                          child: albumHeaderTile(currentSongList, start),
+                        ),
+                      ),
+                      // 收起/展开的高度过渡动画
+                      AnimatedSize(
+                        duration: Duration(milliseconds: 250),
+                        curve: Curves.easeInOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: collapsed
+                            ? SizedBox(width: double.infinity)
+                            : Column(
+                                children: [
+                                  for (
+                                    int i = start;
+                                    i < start + albumStructureGroupCount(start);
+                                    i++
+                                  )
+                                    SizedBox(
+                                      height: 60,
+                                      child: Center(
+                                        child: SongListTile(
+                                          index: i,
+                                          songList: currentSongList,
+                                          folder: folder,
+                                          playlist: playlist,
+                                          isRanking: isRanking,
+                                          isLibrary: isLibrary,
+                                          reorderable: false,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                      ),
+                    ],
                   );
                 },
               );
