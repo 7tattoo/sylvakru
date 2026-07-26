@@ -771,6 +771,12 @@ class _AudioOutputSettingsLayerState extends State<AudioOutputSettingsLayer> {
               );
             },
           ),
+        _choiceTile<int>(
+          title: _l10n.replayGainFallback,
+          notifier: prefs.replayGainFallbackDbNotifier,
+          values: UsbAudioPreferences.replayGainFallbackDbOptions,
+          label: (value) => '$value dB',
+        ),
       ],
     );
   }

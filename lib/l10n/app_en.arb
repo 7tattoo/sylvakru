@@ -310,6 +310,7 @@
   "replayGainApplying": "Syncing",
   "replayGainNotApplied": "Not applied",
   "replayGainNoTag": "No tag",
+  "replayGainFallback": "Untagged fallback gain",
   "dsdGainCompensation": "DSD gain compensation",
   "volumeSmoothHandoff": "Smooth volume handoff",
   "volumeSmoothHandoffDesc": "Keep loudness continuous when switching between digital volume and DAC hardware volume.",

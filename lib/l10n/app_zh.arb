@@ -250,6 +250,7 @@
   "replayGainApplying": "同步中",
   "replayGainNotApplied": "未应用",
   "replayGainNoTag": "无标签",
+  "replayGainFallback": "无标签回退增益",
   "dsdGainCompensation": "DSD 增益补偿",
   "volumeSmoothHandoff": "音量平滑交接",
   "volumeSmoothHandoffDesc": "切换数字音量与 DAC 硬件音量时保持响度连续。",

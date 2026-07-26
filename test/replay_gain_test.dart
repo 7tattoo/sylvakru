@@ -145,6 +145,54 @@ void main() {
     expect(result.source, isNull);
   });
 
+  test('无标签时应用回退增益且没有来源', () {
+    final result = replayGainFor(
+      metadata(),
+      ReplayGainMode.track,
+      fallbackDb: -6,
+    );
+
+    expect(result.gainDb, -6);
+    expect(result.peak, isNull);
+    expect(result.source, isNull);
+  });
+
+  test('有标签时不受回退增益影响', () {
+    final result = replayGainFor(
+      metadata(trackGain: -8, trackPeak: 0.9),
+      ReplayGainMode.track,
+      fallbackDb: -6,
+    );
+
+    expect(result.gainDb, -8);
+    expect(result.source, ReplayGainMode.track);
+  });
+
+  test('关闭 ReplayGain 时忽略回退增益', () {
+    final result = replayGainFor(metadata(), ReplayGainMode.off, fallbackDb: -6);
+
+    expect(result.gainDb, 0);
+  });
+
+  test('非法回退增益被夹到安全范围', () {
+    expect(
+      replayGainFor(metadata(), ReplayGainMode.track, fallbackDb: -99).gainDb,
+      -24,
+    );
+    expect(
+      replayGainFor(metadata(), ReplayGainMode.track, fallbackDb: 6).gainDb,
+      0,
+    );
+    expect(
+      replayGainFor(
+        metadata(),
+        ReplayGainMode.track,
+        fallbackDb: double.nan,
+      ).gainDb,
+      0,
+    );
+  });
+
   test('元数据更新只为当前歌曲重新计算 ReplayGain', () {
     final currentSong = metadata(trackGain: -6, trackPeak: 0.9);
 

@@ -273,6 +273,9 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     usbAudioPreferences.replayGainModeNotifier.addListener(
       _handleReplayGainModeChanged,
     );
+    usbAudioPreferences.replayGainFallbackDbNotifier.addListener(
+      _handleReplayGainModeChanged,
+    );
     if (Platform.isAndroid) {
       WidgetsBinding.instance.addObserver(this);
     }
@@ -287,6 +290,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       currentSong: currentSongNotifier.value,
       updatedSongId: event.songId,
       mode: usbAudioPreferences.replayGainModeNotifier.value,
+      fallbackDb: usbAudioPreferences.replayGainFallbackDbNotifier.value
+          .toDouble(),
     );
     if (refreshed != null) {
       _updateCurrentReplayGain(refreshed);
@@ -301,6 +306,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
           : replayGainFor(
               song,
               usbAudioPreferences.replayGainModeNotifier.value,
+              fallbackDb: usbAudioPreferences.replayGainFallbackDbNotifier.value
+                  .toDouble(),
             ),
     );
   }
@@ -311,7 +318,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
   ) {
     final mode = usbAudioPreferences.replayGainModeNotifier.value;
     if (mode == ReplayGainMode.off) return ReplayGainPlaybackState.off();
-    if (_currentReplayGain.source == null) {
+    // 无标签但配置了回退增益时衰减真实生效，按正常应用流程显示实际 dB
+    if (_currentReplayGain.source == null && _currentReplayGain.gainDb == 0) {
       return ReplayGainPlaybackState.noTag();
     }
     return ReplayGainPlaybackState.pending(
@@ -1017,6 +1025,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     _currentReplayGain = replayGainFor(
       currentSong,
       usbAudioPreferences.replayGainModeNotifier.value,
+      fallbackDb: usbAudioPreferences.replayGainFallbackDbNotifier.value
+          .toDouble(),
     );
     _superLyric.updateLines(currentSong.parsedLyrics!.lines);
 

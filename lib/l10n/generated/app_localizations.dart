@@ -1604,6 +1604,12 @@ abstract class AppLocalizations {
   /// **'No tag'**
   String get replayGainNoTag;
 
+  /// No description provided for @replayGainFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Untagged fallback gain'**
+  String get replayGainFallback;
+
   /// No description provided for @dsdGainCompensation.
   ///
   /// In en, this message translates to:

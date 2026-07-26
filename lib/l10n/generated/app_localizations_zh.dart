@@ -782,6 +782,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get replayGainNoTag => '无标签';
 
   @override
+  String get replayGainFallback => '无标签回退增益';
+
+  @override
   String get dsdGainCompensation => 'DSD 增益补偿';
 
   @override

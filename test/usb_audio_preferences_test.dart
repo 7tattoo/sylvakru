@@ -92,6 +92,24 @@ void main() {
     }
   });
 
+  test('loads and serializes ReplayGain fallback gain with validation', () {
+    usbAudioPreferences.load({'usbReplayGainFallbackDb': -9});
+    expect(usbAudioPreferences.replayGainFallbackDbNotifier.value, -9);
+    expect(usbAudioPreferences.toMap()['usbReplayGainFallbackDb'], -9);
+
+    // 不在选项内或缺失时回退默认值
+    usbAudioPreferences.load({'usbReplayGainFallbackDb': -7});
+    expect(
+      usbAudioPreferences.replayGainFallbackDbNotifier.value,
+      UsbAudioPreferences.defaultReplayGainFallbackDb,
+    );
+    usbAudioPreferences.load({});
+    expect(
+      usbAudioPreferences.replayGainFallbackDbNotifier.value,
+      UsbAudioPreferences.defaultReplayGainFallbackDb,
+    );
+  });
+
   test('按 VID PID 保存独立 USB 音量并过滤非法数据', () {
     usbAudioPreferences.load({
       'usbExclusiveDeviceVolumes': {

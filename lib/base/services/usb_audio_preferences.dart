@@ -46,6 +46,10 @@ enum UsbBitDepthMode { auto, pcm16, pcm24, pcm32 }
 class UsbAudioPreferences {
   static const sampleRates = [44100, 48000, 88200, 96000, 176400, 192000];
   static const defaultExclusiveVolume = 0.3;
+  // 无 ReplayGain 标签歌曲的回退增益（dB）：有标签的歌普遍被压负增益，
+  // 无标签不衰减会在切歌时突然变响，默认 -6 dB 拉近响度
+  static const replayGainFallbackDbOptions = [0, -3, -6, -9, -12];
+  static const defaultReplayGainFallbackDb = -6;
 
   final fixedSampleRateEnabledNotifier = ValueNotifier(false);
   final fixedSampleRateNotifier = ValueNotifier<int?>(null);
@@ -56,6 +60,9 @@ class UsbAudioPreferences {
   final dsd512PcmRateNotifier = ValueNotifier(88200);
   final performanceModeNotifier = ValueNotifier(true);
   final replayGainModeNotifier = ValueNotifier(ReplayGainMode.off);
+  final replayGainFallbackDbNotifier = ValueNotifier(
+    defaultReplayGainFallbackDb,
+  );
   final volumeControlModeNotifier = ValueNotifier(UsbVolumeControlMode.auto);
   final dsdGainCompensationNotifier = ValueNotifier(0);
   final bitDepthModeNotifier = ValueNotifier(UsbBitDepthMode.auto);
@@ -92,6 +99,11 @@ class UsbAudioPreferences {
       json['usbReplayGainMode'] as String?,
       ReplayGainMode.off,
     );
+    final fallbackDb = json['usbReplayGainFallbackDb'] as int?;
+    replayGainFallbackDbNotifier.value =
+        fallbackDb != null && replayGainFallbackDbOptions.contains(fallbackDb)
+        ? fallbackDb
+        : defaultReplayGainFallbackDb;
     volumeControlModeNotifier.value = _enumByName(
       UsbVolumeControlMode.values,
       json['usbVolumeControlMode'] as String?,
@@ -144,6 +156,7 @@ class UsbAudioPreferences {
       'usbDsd512PcmRate': dsd512PcmRateNotifier.value,
       'usbPerformanceMode': performanceModeNotifier.value,
       'usbReplayGainMode': replayGainModeNotifier.value.name,
+      'usbReplayGainFallbackDb': replayGainFallbackDbNotifier.value,
       'usbVolumeControlMode': volumeControlModeNotifier.value.name,
       'usbDsdGainCompensation': dsdGainCompensationNotifier.value,
       'usbBitDepthMode': bitDepthModeNotifier.value.name,

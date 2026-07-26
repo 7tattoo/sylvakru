@@ -796,6 +796,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get replayGainNoTag => 'No tag';
 
   @override
+  String get replayGainFallback => 'Untagged fallback gain';
+
+  @override
   String get dsdGainCompensation => 'DSD gain compensation';
 
   @override

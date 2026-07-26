@@ -146,7 +146,11 @@ double limitedOutputGainIncrease({
   return math.min(target, start * dbToLinear(safeIncreaseDb));
 }
 
-ReplayGainResult replayGainFor(MyAudioMetadata song, ReplayGainMode mode) {
+ReplayGainResult replayGainFor(
+  MyAudioMetadata song,
+  ReplayGainMode mode, {
+  double fallbackDb = 0,
+}) {
   if (mode == ReplayGainMode.off) {
     return const ReplayGainResult(0, null, null);
   }
@@ -169,18 +173,24 @@ ReplayGainResult replayGainFor(MyAudioMetadata song, ReplayGainMode mode) {
         : math.min(gain, -20 * math.log(peak) / math.ln10);
     return ReplayGainResult(limitedGain, peak, source);
   }
-  return const ReplayGainResult(0, null, null);
+  // 无标签回退增益：有标签的歌普遍被压负增益，无标签保持 0 dB 会在
+  // 切歌时突然变响，按用户配置的回退值统一衰减拉近响度
+  final safeFallbackDb = fallbackDb.isFinite
+      ? fallbackDb.clamp(-24.0, 0.0).toDouble()
+      : 0.0;
+  return ReplayGainResult(safeFallbackDb, null, null);
 }
 
 ReplayGainResult? replayGainForMetadataUpdate({
   required MyAudioMetadata? currentSong,
   required String updatedSongId,
   required ReplayGainMode mode,
+  double fallbackDb = 0,
 }) {
   if (currentSong == null || currentSong.id != updatedSongId) {
     return null;
   }
-  return replayGainFor(currentSong, mode);
+  return replayGainFor(currentSong, mode, fallbackDb: fallbackDb);
 }
 
 bool supplementReplayGainMetadata(
