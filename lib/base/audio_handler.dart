@@ -956,9 +956,17 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     savePlayState();
   }
 
-  Future<void> _setLyricsAndUpdateColors(MyAudioMetadata song) async {
+  Future<void> _setLyricsAndUpdateColors(
+    MyAudioMetadata song, {
+    int? generation,
+  }) async {
     await setParsedLyrics(song);
-    currentCoverArtColor = await computeCoverArtColor(song);
+    final coverArtColor = await computeCoverArtColor(song);
+    // 异步获取期间用户已切到别的歌：不把过期配色覆盖到当前界面
+    if (generation != null && generation != _loadGeneration) {
+      return;
+    }
+    currentCoverArtColor = coverArtColor;
     contrastColorTheme = ContrastColorGenerator.generate(currentCoverArtColor);
     if (lyricsPageThemeNotifier.value == .vivid) {
       colorManager.updateLyricsPageColors();
@@ -999,10 +1007,13 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     final currentSong = playQueue[currentIndex];
 
     unawaited(library.supplementReplayGainForPlayback(currentSong));
-    await _setLyricsAndUpdateColors(currentSong);
-    if (generation != _loadGeneration) {
-      return;
-    }
+    // 歌词/封面色可能走网络：不阻塞切歌，先更新当前曲目并继续起播，
+    // 就绪后再刷新歌词与配色（setParsedLyrics 在首个 await 前已给
+    // parsedLyrics 赋占位对象，歌词页此时直接读是安全的）
+    final lyricsAndColorsReady = _setLyricsAndUpdateColors(
+      currentSong,
+      generation: generation,
+    );
     _currentReplayGain = replayGainFor(
       currentSong,
       usbAudioPreferences.replayGainModeNotifier.value,
@@ -1010,6 +1021,20 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     _superLyric.updateLines(currentSong.parsedLyrics!.lines);
 
     currentSongNotifier.value = currentSong;
+    unawaited(
+      lyricsAndColorsReady.then((_) {
+        if (generation != _loadGeneration) {
+          return;
+        }
+        _superLyric.updateLines(currentSong.parsedLyrics!.lines);
+        updateLyricsNotifier.value++;
+        if (isPlayingNotifier.value) {
+          unawaited(_superLyric.publishAt(getPosition()));
+        }
+      }).catchError((Object error) {
+        logger.output("set lyrics and colors failed:$error");
+      }),
+    );
 
     isLoading = true;
     final replacingUsbExclusive = _usbExclusiveActive;
