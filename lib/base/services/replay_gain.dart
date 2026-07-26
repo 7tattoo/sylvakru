@@ -174,7 +174,11 @@ ReplayGainResult replayGainFor(
     return ReplayGainResult(limitedGain, peak, source);
   }
   // 无标签回退增益：有标签的歌普遍被压负增益，无标签保持 0 dB 会在
-  // 切歌时突然变响，按用户配置的回退值统一衰减拉近响度
+  // 切歌时突然变响，按用户配置的回退值统一衰减拉近响度。
+  // DSD 不适用：几乎都无标签且转 PCM/DoP 电平本就偏低，再压会明显偏小声
+  if (song.isDsd) {
+    return const ReplayGainResult(0, null, null);
+  }
   final safeFallbackDb = fallbackDb.isFinite
       ? fallbackDb.clamp(-24.0, 0.0).toDouble()
       : 0.0;

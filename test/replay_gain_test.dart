@@ -157,6 +157,16 @@ void main() {
     expect(result.source, isNull);
   });
 
+  test('DSD 无标签不应用回退增益', () {
+    final song = metadata();
+    song.path = '/music/test.dsf';
+
+    final result = replayGainFor(song, ReplayGainMode.track, fallbackDb: -6);
+
+    expect(result.gainDb, 0);
+    expect(result.source, isNull);
+  });
+
   test('有标签时不受回退增益影响', () {
     final result = replayGainFor(
       metadata(trackGain: -8, trackPeak: 0.9),
