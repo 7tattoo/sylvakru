@@ -58,6 +58,15 @@ add_library(
 target_include_directories(sylvakru_wavpack_decoder PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(sylvakru_wavpack_decoder PUBLIC WavPack::WavPack)
 
+# DSD 容器解析与 DoP/Native 打包：平台无关纯逻辑，从 Kotlin UsbDsd.kt 下沉，
+# 供 Android JNI 与未来桌面独占实现共同复用
+add_library(
+    sylvakru_usb_dsd
+    STATIC
+    usb_dsd.cpp
+)
+target_include_directories(sylvakru_usb_dsd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 if(ANDROID)
     add_library(
         sylvakru_usb_exclusive
@@ -95,4 +104,8 @@ if(SYLVAKRU_BUILD_HOST_TESTS)
     # WavPack 测试不需要 fixture：用 libwavpack 编码 API 现场生成再往返验证
     add_executable(wavpack_decoder_test tests/wavpack_decoder_test.cpp)
     target_link_libraries(wavpack_decoder_test PRIVATE sylvakru_wavpack_decoder)
+
+    # DSD 测试不需要 fixture：运行时手工构造最小 DSF/DFF 文件与 Kotlin 版对拍
+    add_executable(usb_dsd_test tests/usb_dsd_test.cpp)
+    target_link_libraries(usb_dsd_test PRIVATE sylvakru_usb_dsd)
 endif()
