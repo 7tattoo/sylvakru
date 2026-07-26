@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:sylvakru/base/my_audio_metadata.dart';
 import 'package:sylvakru/base/services/color_manager.dart';
@@ -276,21 +278,32 @@ class AudioOutputChip extends StatelessWidget {
   }
 }
 
+// showAudioOutputSheet 弹出前要 await refreshStatus，连点胶囊会在等待期间
+// 各自排队再弹一层；面板打开期间同样置真，杜绝叠层
+bool _audioOutputSheetShowing = false;
+
 Future<void> showAudioOutputSheet(
   BuildContext context,
   MyAudioMetadata? song,
 ) async {
-  await usbAudioService.refreshStatus();
-  if (!context.mounted) return;
+  if (_audioOutputSheetShowing) return;
+  _audioOutputSheetShowing = true;
+  try {
+    await usbAudioService.refreshStatus();
+    if (!context.mounted) return;
 
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    barrierColor: _barrierColor(),
-    backgroundColor: Colors.transparent,
-    builder: (context) => RepaintBoundary(child: _AudioOutputSheet(song: song)),
-  );
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      barrierColor: _barrierColor(),
+      backgroundColor: Colors.transparent,
+      builder: (context) =>
+          RepaintBoundary(child: _AudioOutputSheet(song: song)),
+    );
+  } finally {
+    _audioOutputSheetShowing = false;
+  }
 }
 
 Future<void> showUsbAudioDetectedSheet(
@@ -528,6 +541,38 @@ class _AudioOutputSheet extends StatefulWidget {
 }
 
 class _AudioOutputSheetState extends State<_AudioOutputSheet> {
+  // 音量键调节时 hardwareVolumeSyncPending 每次写入都亚秒级翻转一轮，
+  // “（同步中）”后缀随之闪现会让 Bit-perfect 行反复换行、整个面板高度抖动；
+  // 只有挂起持续超过该阈值（如写后验证卡住）才值得上屏
+  static const _syncPendingDisplayDelay = Duration(milliseconds: 400);
+  Timer? _syncPendingTimer;
+  bool _syncPendingDisplayed = false;
+
+  @override
+  void dispose() {
+    _syncPendingTimer?.cancel();
+    super.dispose();
+  }
+
+  // build 期间只改字段不 setState；到点后由计时器触发重建
+  bool _debouncedSyncPending(bool pending) {
+    if (!pending) {
+      _syncPendingTimer?.cancel();
+      _syncPendingTimer = null;
+      _syncPendingDisplayed = false;
+    } else if (!_syncPendingDisplayed && _syncPendingTimer == null) {
+      _syncPendingTimer = Timer(_syncPendingDisplayDelay, () {
+        _syncPendingTimer = null;
+        if (mounted) {
+          setState(() {
+            _syncPendingDisplayed = true;
+          });
+        }
+      });
+    }
+    return _syncPendingDisplayed;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -678,7 +723,14 @@ class _AudioOutputSheetState extends State<_AudioOutputSheet> {
                         ),
                       _InfoRow(
                         'Bit-perfect',
-                        _bitPerfectStatusLabel(status, l10n),
+                        _bitPerfectStatusLabel(
+                          status,
+                          l10n,
+                          showSyncPending: _debouncedSyncPending(
+                            exclusive.active &&
+                                exclusive.hardwareVolumeSyncPending,
+                          ),
+                        ),
                       ),
                       _InfoRow(
                         l10n.replayGain,
@@ -1035,7 +1087,11 @@ String _outputEncodingLabel(UsbAudioStatus status, AppLocalizations l10n) {
   return bitDepth == l10n.unknown ? encoding : 'PCM / $bitDepth';
 }
 
-String _bitPerfectStatusLabel(UsbAudioStatus status, AppLocalizations l10n) {
+String _bitPerfectStatusLabel(
+  UsbAudioStatus status,
+  AppLocalizations l10n, {
+  bool showSyncPending = true,
+}) {
   final exclusive = usbExclusivePlaybackStateNotifier.value;
   // 独占直驱时反映独占真实位完美状态；非独占回退系统共享链路偏好
   if (exclusive.active) {
@@ -1047,7 +1103,11 @@ String _bitPerfectStatusLabel(UsbAudioStatus status, AppLocalizations l10n) {
     if (exclusive.hardwareVolumeFrozen) {
       processing = '$processing (${l10n.hardwareVolumeFrozen})';
     } else if (exclusive.hardwareVolumeSyncPending) {
-      processing = '$processing (${l10n.hardwareVolumeSyncPending})';
+      // 去抖窗口内（showSyncPending=false）不加任何瞬态后缀：写入在途时
+      // “未验证”也必然短暂为真，落到下一分支同样会闪
+      if (showSyncPending) {
+        processing = '$processing (${l10n.hardwareVolumeSyncPending})';
+      }
     } else if (exclusive.hardwareVolumeActive &&
         exclusive.hardwareVolumeUnverified) {
       processing = '$processing (${l10n.hardwareVolumeUnverified})';
