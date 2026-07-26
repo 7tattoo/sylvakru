@@ -67,6 +67,15 @@ add_library(
 )
 target_include_directories(sylvakru_usb_dsd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+# UAC 原始描述符解析（AS 格式/时钟源/Feature Unit 音量/输出端子源）：
+# 从引擎 Kotlin 私有函数下沉的平台无关纯逻辑
+add_library(
+    sylvakru_usb_uac
+    STATIC
+    usb_uac.cpp
+)
+target_include_directories(sylvakru_usb_uac PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 if(ANDROID)
     add_library(
         sylvakru_usb_exclusive
@@ -110,4 +119,8 @@ if(SYLVAKRU_BUILD_HOST_TESTS)
     # DSD 测试不需要 fixture：运行时手工构造最小 DSF/DFF 文件与 Kotlin 版对拍
     add_executable(usb_dsd_test tests/usb_dsd_test.cpp)
     target_link_libraries(usb_dsd_test PRIVATE sylvakru_usb_dsd)
+
+    # UAC 描述符测试：手工构造 UAC1/UAC2 描述符片段对拍
+    add_executable(usb_uac_test tests/usb_uac_test.cpp)
+    target_link_libraries(usb_uac_test PRIVATE sylvakru_usb_uac)
 endif()
