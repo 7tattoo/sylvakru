@@ -590,10 +590,26 @@ extension _SongListPanel on _SongListState {
             ),
           ),
           Expanded(
-            child: Text(
-              album,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontWeight: FontWeight.bold),
+            child: ValueListenableBuilder(
+              valueListenable: currentSongNotifier,
+              builder: (_, currentSong, _) {
+                return ValueListenableBuilder(
+                  valueListenable: highlightTextColor.valueNotifier,
+                  builder: (context, value, child) {
+                    return Text(
+                      album,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        // 正在播放的专辑用高亮色区分，与歌曲行高亮一致
+                        color: albumStructureGroupIsPlaying(album)
+                            ? value
+                            : null,
+                      ),
+                    );
+                  },
+                );
+              },
             ),
           ),
           SizedBox(width: 10),

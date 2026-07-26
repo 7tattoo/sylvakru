@@ -424,10 +424,24 @@ extension _SongListPage on _SongListState {
     return ListTile(
       contentPadding: EdgeInsets.fromLTRB(20, 0, 20, 0),
       leading: CoverArtWidget(size: 40, borderRadius: 4, song: song),
-      title: Text(
-        album,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(fontWeight: FontWeight.bold),
+      title: ValueListenableBuilder(
+        valueListenable: currentSongNotifier,
+        builder: (_, currentSong, _) {
+          return ValueListenableBuilder(
+            valueListenable: highlightTextColor.valueNotifier,
+            builder: (context, value, child) {
+              return Text(
+                album,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  // 正在播放的专辑用高亮色区分，与歌曲行高亮一致
+                  color: albumStructureGroupIsPlaying(album) ? value : null,
+                ),
+              );
+            },
+          );
+        },
       ),
       subtitle: Text(
         l10n.songCount(albumStructureGroupCount(start)),
