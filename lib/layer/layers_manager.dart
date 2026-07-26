@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:sylvakru/base/audio_handler.dart';
 import 'package:sylvakru/base/data/artist_album.dart';
@@ -7,7 +9,7 @@ import 'package:sylvakru/base/services/color_manager.dart';
 import 'package:sylvakru/base/app.dart';
 import 'package:sylvakru/base/utils/dynamic_detail_route.dart';
 import 'package:sylvakru/base/utils/media_query.dart';
-import 'package:sylvakru/base/widgets/blurred_cover_art_widget.dart';
+import 'package:sylvakru/base/widgets/cover_art_widget.dart';
 import 'package:sylvakru/base/data/history.dart';
 import 'package:sylvakru/landscape_view/sidebar.dart';
 import 'package:sylvakru/layer/about_layer.dart';
@@ -81,11 +83,9 @@ class LayersManager {
             return ValueListenableBuilder(
               valueListenable: layerInfo.changeNotifier,
               builder: (context, value, child) {
-                return BlurredCoverArtWidget(
+                return CoverArtWidget(
                   song: layerInfo.backgroundSong,
                   color: layerInfo.backgroundCoverArtColor,
-                  sigmaX: 30,
-                  sigmaY: 30,
                 );
               },
             );
@@ -98,13 +98,19 @@ class LayersManager {
               return SizedBox.shrink();
             }
 
-            return ValueListenableBuilder(
-              valueListenable: layerInfo.changeNotifier,
-              builder: (context, value, child) {
-                return Container(
-                  color: layerInfo.backgroundCoverArtColor.withAlpha(180),
-                );
-              },
+            // ClipRect is important
+            return ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                child: ValueListenableBuilder(
+                  valueListenable: layerInfo.changeNotifier,
+                  builder: (context, value, child) {
+                    return Container(
+                      color: layerInfo.backgroundCoverArtColor.withAlpha(180),
+                    );
+                  },
+                ),
+              ),
             );
           },
         ),
