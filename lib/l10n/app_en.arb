@@ -247,7 +247,6 @@
   "audioOutputSubtitle": "USB exclusive, fixed rate, DSD & bit depth",
   "usbDacDisconnected": "USB DAC disconnected; reverted to Android system output",
   "usbOutputSettings": "USB output settings",
-  "fixedSampleRateOutput": "Fixed sample rate output",
   "dsdMode": "DSD mode",
   "transportIdle": "Idle",
   "transportPaused": "Paused",
@@ -319,9 +318,6 @@
   "releaseUsbBandwidth": "Release USB bandwidth after playback",
   "releaseUsbBandwidthDesc": "Let the system reclaim USB audio resources after playback stops.",
   "supportSection": "Support",
-  "usbExclusiveDiagnostics": "USB exclusive diagnostics",
-  "detecting": "Checking…",
-  "startDetection": "Start check",
   "generateDiagnosticsReport": "Generate diagnostics report",
   "generateDiagnosticsReportDesc": "Bundle device descriptors, parse results and recent logs to copy or export for the developer to debug DAC compatibility.",
   "importQuirkConfig": "Import quirk config",
@@ -353,8 +349,6 @@
     }
   },
   "minimumNone": "Min --",
-  "enableFixedSampleRate": "Enable fixed sample rate",
-  "enableFixedSampleRateDesc": "When on, USB output prefers the selected sample rate below.",
   "dsdOutputStrategy": "DSD output strategy",
   "dsdToPcm": "Decoded to PCM via the system output (most compatible)",
   "dsdToPcmDesc": "Wrap DSD in PCM frames; used when the device supports it",
@@ -374,15 +368,6 @@
       "path": { "type": "String" }
     }
   },
-  "probeDescription": "Check USB permission, Audio Class descriptors and interface claim capability.",
-  "probeWaitingAuth": "Waiting for USB authorization.",
-  "probeClaimable": "Claimable · {count} audio interface(s)",
-  "@probeClaimable": {
-    "placeholders": {
-      "count": { "type": "int" }
-    }
-  },
-  "probeCannotClaim": "Could not claim a USB Audio Interface.",
   "speaker": "Speaker",
   "usbExclusive": "USB exclusive",
   "appliedPreference": "{name} · preference applied",

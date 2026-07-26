@@ -131,11 +131,6 @@ int? preferredExclusiveSampleRate(
   UsbAudioStatus status,
   int? sourceSampleRate,
 ) {
-  final fixedRate = usbAudioPreferences.preferredFixedSampleRate();
-  if (fixedRate != null) {
-    return fixedRate;
-  }
-
   final matchedSourceRate = matchedSafeSampleRate(sourceSampleRate);
   final deviceRates = buildSampleRateOptions(status, null).whereType<int>();
   if (matchedSourceRate != null && deviceRates.contains(matchedSourceRate)) {

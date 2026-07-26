@@ -31,7 +31,6 @@ final audioOutputVisibleNotifier = ValueNotifier(true);
 
 enum AudioOutputSettingsPageKind {
   overview,
-  fixedSampleRate,
   dsdMode,
   replayGain,
 }
@@ -70,8 +69,6 @@ class AudioOutputSettingsLayer extends StatefulWidget {
 }
 
 class _AudioOutputSettingsLayerState extends State<AudioOutputSettingsLayer> {
-  UsbExclusiveProbeResult? _exclusiveProbeResult;
-  bool _probingExclusive = false;
   bool _refreshingStatus = false;
   bool _generatingReport = false;
 
@@ -89,7 +86,7 @@ class _AudioOutputSettingsLayerState extends State<AudioOutputSettingsLayer> {
         audioOutputVisibleNotifier,
       ]),
       builder: (context, _) {
-        // overview 在 audioOutputVisibleNotifier 为真时显示；固定采样率/DSD 深层页压栈后
+        // overview 在 audioOutputVisibleNotifier 为真时显示；DSD/回放增益深层页压栈后
         // 该 notifier 置假，overview 隐藏、深层页显示，避免横屏底层残留。
         final visible =
             widget.pageKind == AudioOutputSettingsPageKind.overview
@@ -104,7 +101,6 @@ class _AudioOutputSettingsLayerState extends State<AudioOutputSettingsLayer> {
   String get _title {
     return switch (widget.pageKind) {
       AudioOutputSettingsPageKind.overview => _l10n.usbOutputSettings,
-      AudioOutputSettingsPageKind.fixedSampleRate => _l10n.fixedSampleRateOutput,
       AudioOutputSettingsPageKind.dsdMode => _l10n.dsdMode,
       AudioOutputSettingsPageKind.replayGain => _l10n.replayGain,
     };
@@ -122,8 +118,6 @@ class _AudioOutputSettingsLayerState extends State<AudioOutputSettingsLayer> {
               children: [
                 switch (widget.pageKind) {
                   AudioOutputSettingsPageKind.overview => _overview(),
-                  AudioOutputSettingsPageKind.fixedSampleRate =>
-                    _fixedSampleRate(),
                   AudioOutputSettingsPageKind.dsdMode => _dsdMode(),
                   AudioOutputSettingsPageKind.replayGain => _replayGain(),
                 },
@@ -151,18 +145,6 @@ class _AudioOutputSettingsLayerState extends State<AudioOutputSettingsLayer> {
             _settingsCard(
               children: [
                 _formatSummaryTile(status),
-                _navTile(
-                  title: _l10n.fixedSampleRateOutput,
-                  value: prefs.fixedSampleRateEnabledNotifier.value
-                      ? formatSampleRate(prefs.fixedSampleRateNotifier.value, _l10n)
-                      : _l10n.usbOff,
-                  onTap: () {
-                    layersManager.pushDetail(
-                      'settings',
-                      'usb_fixed_sample_rate',
-                    );
-                  },
-                ),
                 _navTile(
                   title: _l10n.dsdMode,
                   value: _dsdModeLabel(prefs.dsdModeNotifier.value),
@@ -304,13 +286,6 @@ class _AudioOutputSettingsLayerState extends State<AudioOutputSettingsLayer> {
             _sectionTitle(_l10n.supportSection),
             _settingsCard(
               children: [
-                _actionTile(
-                  icon: Icons.fact_check_rounded,
-                  title: _l10n.usbExclusiveDiagnostics,
-                  subtitle: _exclusiveProbeSummary(),
-                  actionLabel: _probingExclusive ? _l10n.detecting : _l10n.startDetection,
-                  onTap: _probingExclusive ? null : _runExclusiveProbe,
-                ),
                 _actionTile(
                   icon: Icons.assignment_rounded,
                   title: _l10n.generateDiagnosticsReport,
@@ -665,38 +640,6 @@ class _AudioOutputSettingsLayerState extends State<AudioOutputSettingsLayer> {
           },
         );
       },
-    );
-  }
-
-  Widget _fixedSampleRate() {
-    final prefs = usbAudioPreferences;
-    return Column(
-      children: [
-        _settingsCard(
-          children: [
-            _switchTile(
-              title: _l10n.enableFixedSampleRate,
-              subtitle: _l10n.enableFixedSampleRateDesc,
-              notifier: prefs.fixedSampleRateEnabledNotifier,
-            ),
-            for (final rate in UsbAudioPreferences.sampleRates)
-              ValueListenableBuilder<int?>(
-                valueListenable: prefs.fixedSampleRateNotifier,
-                builder: (context, selectedRate, _) {
-                  return _radioTile<int>(
-                    title: formatSampleRate(rate, _l10n),
-                    value: rate,
-                    groupValue: selectedRate,
-                    onTap: () {
-                      prefs.fixedSampleRateNotifier.value = rate;
-                      setting.save();
-                    },
-                  );
-                },
-              ),
-          ],
-        ),
-      ],
     );
   }
 
@@ -1369,20 +1312,6 @@ class _AudioOutputSettingsLayerState extends State<AudioOutputSettingsLayer> {
     });
   }
 
-  Future<void> _runExclusiveProbe() async {
-    setState(() {
-      _probingExclusive = true;
-    });
-
-    final result = await usbAudioService.probeExclusiveAccess();
-    if (!mounted) return;
-
-    setState(() {
-      _exclusiveProbeResult = result;
-      _probingExclusive = false;
-    });
-  }
-
   Future<void> _generateDiagnosticsReport() async {
     setState(() {
       _generatingReport = true;
@@ -1626,16 +1555,6 @@ class _AudioOutputSettingsLayerState extends State<AudioOutputSettingsLayer> {
         behavior: SnackBarBehavior.floating,
       ),
     );
-  }
-
-  String _exclusiveProbeSummary() {
-    final result = _exclusiveProbeResult;
-    if (result == null) return _l10n.probeDescription;
-    if (!result.permissionGranted) return _l10n.probeWaitingAuth;
-    if (result.interfaceClaimed) {
-      return _l10n.probeClaimable(result.audioInterfaceCount);
-    }
-    return result.message ?? _l10n.probeCannotClaim;
   }
 
   String _sourceFormatLabel(MyAudioMetadata? song) {

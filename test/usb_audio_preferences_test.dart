@@ -8,8 +8,6 @@ void main() {
 
   test('loads and serializes USB audio preferences', () {
     usbAudioPreferences.load({
-      'usbFixedSampleRateEnabled': true,
-      'usbFixedSampleRate': 96000,
       'usbDsdMode': 'native',
       'usbDsd64PcmRate': 176400,
       'usbPerformanceMode': false,
@@ -23,7 +21,6 @@ void main() {
       'usbVolumeSmoothHandoff': false,
     });
 
-    expect(usbAudioPreferences.preferredFixedSampleRate(), 96000);
     expect(usbAudioPreferences.dsdModeNotifier.value, UsbDsdMode.native);
     expect(usbAudioPreferences.dsd64PcmRateNotifier.value, 176400);
     expect(usbAudioPreferences.performanceModeNotifier.value, isFalse);
@@ -45,6 +42,8 @@ void main() {
     expect(map['usbDsdMode'], 'native');
     expect(map['usbForegroundBufferMs'], 320);
     expect(map['usbBackgroundBufferMs'], 1000);
+    expect(map, isNot(contains('usbFixedSampleRateEnabled')));
+    expect(map, isNot(contains('usbFixedSampleRate')));
     expect(map, isNot(contains('usbBusSpeedMode')));
     expect(map, isNot(contains('usbBitDepthCompat')));
     expect(map, isNot(contains('usbSampleRateCompat')));
@@ -178,12 +177,4 @@ void main() {
     expect(usbExclusiveDigitalVolumeGain(2), 1);
   });
 
-  test('ignores unsupported fixed sample rate', () {
-    usbAudioPreferences.load({
-      'usbFixedSampleRateEnabled': true,
-      'usbFixedSampleRate': 12345,
-    });
-
-    expect(usbAudioPreferences.preferredFixedSampleRate(), isNull);
-  });
 }

@@ -51,8 +51,6 @@ class UsbAudioPreferences {
   static const replayGainFallbackDbOptions = [0, -3, -6, -9, -12];
   static const defaultReplayGainFallbackDb = -6;
 
-  final fixedSampleRateEnabledNotifier = ValueNotifier(false);
-  final fixedSampleRateNotifier = ValueNotifier<int?>(null);
   final dsdModeNotifier = ValueNotifier(UsbDsdMode.dop);
   final dsd64PcmRateNotifier = ValueNotifier(88200);
   final dsd128PcmRateNotifier = ValueNotifier(88200);
@@ -75,11 +73,6 @@ class UsbAudioPreferences {
 
   void load(Map<String, dynamic> json) {
     loadDeviceVolumes(json['usbExclusiveDeviceVolumes']);
-    fixedSampleRateEnabledNotifier.value =
-        json['usbFixedSampleRateEnabled'] as bool? ?? false;
-    fixedSampleRateNotifier.value = _validRate(
-      json['usbFixedSampleRate'] as int?,
-    );
     dsdModeNotifier.value = _enumByName(
       UsbDsdMode.values,
       json['usbDsdMode'] as String?,
@@ -147,8 +140,6 @@ class UsbAudioPreferences {
 
   Map<String, Object?> toMap() {
     return {
-      'usbFixedSampleRateEnabled': fixedSampleRateEnabledNotifier.value,
-      'usbFixedSampleRate': fixedSampleRateNotifier.value,
       'usbDsdMode': dsdModeNotifier.value.name,
       'usbDsd64PcmRate': dsd64PcmRateNotifier.value,
       'usbDsd128PcmRate': dsd128PcmRateNotifier.value,
@@ -184,13 +175,6 @@ class UsbAudioPreferences {
       return;
     }
     _exclusiveDeviceVolumes[normalized] = volume.clamp(0.0, 1.0).toDouble();
-  }
-
-  int? preferredFixedSampleRate() {
-    if (!fixedSampleRateEnabledNotifier.value) {
-      return null;
-    }
-    return _validRate(fixedSampleRateNotifier.value);
   }
 
   String preferredEncoding() {

@@ -1513,11 +1513,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       return dsdPcmRate;
     }
 
-    final fixedRate = usbAudioPreferences.preferredFixedSampleRate();
-    if (fixedRate != null) {
-      return fixedRate;
-    }
-
     final matchedSourceRate = _matchedSafeSampleRate(song.samplerate);
     if (matchedSourceRate != null &&
         _statusSupportsSampleRate(status, matchedSourceRate)) {

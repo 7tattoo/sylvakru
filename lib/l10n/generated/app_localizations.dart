@@ -1292,12 +1292,6 @@ abstract class AppLocalizations {
   /// **'USB output settings'**
   String get usbOutputSettings;
 
-  /// No description provided for @fixedSampleRateOutput.
-  ///
-  /// In en, this message translates to:
-  /// **'Fixed sample rate output'**
-  String get fixedSampleRateOutput;
-
   /// No description provided for @dsdMode.
   ///
   /// In en, this message translates to:
@@ -1658,24 +1652,6 @@ abstract class AppLocalizations {
   /// **'Support'**
   String get supportSection;
 
-  /// No description provided for @usbExclusiveDiagnostics.
-  ///
-  /// In en, this message translates to:
-  /// **'USB exclusive diagnostics'**
-  String get usbExclusiveDiagnostics;
-
-  /// No description provided for @detecting.
-  ///
-  /// In en, this message translates to:
-  /// **'Checking…'**
-  String get detecting;
-
-  /// No description provided for @startDetection.
-  ///
-  /// In en, this message translates to:
-  /// **'Start check'**
-  String get startDetection;
-
   /// No description provided for @generateDiagnosticsReport.
   ///
   /// In en, this message translates to:
@@ -1802,18 +1778,6 @@ abstract class AppLocalizations {
   /// **'Min --'**
   String get minimumNone;
 
-  /// No description provided for @enableFixedSampleRate.
-  ///
-  /// In en, this message translates to:
-  /// **'Enable fixed sample rate'**
-  String get enableFixedSampleRate;
-
-  /// No description provided for @enableFixedSampleRateDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'When on, USB output prefers the selected sample rate below.'**
-  String get enableFixedSampleRateDesc;
-
   /// No description provided for @dsdOutputStrategy.
   ///
   /// In en, this message translates to:
@@ -1897,30 +1861,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Exported to {path}'**
   String exportedTo(String path);
-
-  /// No description provided for @probeDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Check USB permission, Audio Class descriptors and interface claim capability.'**
-  String get probeDescription;
-
-  /// No description provided for @probeWaitingAuth.
-  ///
-  /// In en, this message translates to:
-  /// **'Waiting for USB authorization.'**
-  String get probeWaitingAuth;
-
-  /// No description provided for @probeClaimable.
-  ///
-  /// In en, this message translates to:
-  /// **'Claimable · {count} audio interface(s)'**
-  String probeClaimable(int count);
-
-  /// No description provided for @probeCannotClaim.
-  ///
-  /// In en, this message translates to:
-  /// **'Could not claim a USB Audio Interface.'**
-  String get probeCannotClaim;
 
   /// No description provided for @speaker.
   ///

@@ -620,9 +620,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get usbOutputSettings => 'USB 输出设置';
 
   @override
-  String get fixedSampleRateOutput => '固定采样率输出';
-
-  @override
   String get dsdMode => 'DSD 模式';
 
   @override
@@ -809,15 +806,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get supportSection => '支持';
 
   @override
-  String get usbExclusiveDiagnostics => 'USB 独占后台诊断';
-
-  @override
-  String get detecting => '检测中';
-
-  @override
-  String get startDetection => '开始检测';
-
-  @override
   String get generateDiagnosticsReport => '生成诊断报告';
 
   @override
@@ -886,12 +874,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get minimumNone => '最低 --';
 
   @override
-  String get enableFixedSampleRate => '启用固定采样率';
-
-  @override
-  String get enableFixedSampleRateDesc => '开启后 USB 输出优先使用下方选定采样率。';
-
-  @override
   String get dsdOutputStrategy => 'DSD 输出策略';
 
   @override
@@ -935,20 +917,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String exportedTo(String path) {
     return '已导出到 $path';
   }
-
-  @override
-  String get probeDescription => '检查 USB 权限、Audio Class 描述符与接口 claim 能力。';
-
-  @override
-  String get probeWaitingAuth => '等待 USB 授权。';
-
-  @override
-  String probeClaimable(int count) {
-    return '可 claim · $count 个 Audio Interface';
-  }
-
-  @override
-  String get probeCannotClaim => '未能 claim USB Audio Interface。';
 
   @override
   String get speaker => '扬声器';

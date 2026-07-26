@@ -629,9 +629,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get usbOutputSettings => 'USB output settings';
 
   @override
-  String get fixedSampleRateOutput => 'Fixed sample rate output';
-
-  @override
   String get dsdMode => 'DSD mode';
 
   @override
@@ -825,15 +822,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get supportSection => 'Support';
 
   @override
-  String get usbExclusiveDiagnostics => 'USB exclusive diagnostics';
-
-  @override
-  String get detecting => 'Checking…';
-
-  @override
-  String get startDetection => 'Start check';
-
-  @override
   String get generateDiagnosticsReport => 'Generate diagnostics report';
 
   @override
@@ -904,13 +892,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get minimumNone => 'Min --';
 
   @override
-  String get enableFixedSampleRate => 'Enable fixed sample rate';
-
-  @override
-  String get enableFixedSampleRateDesc =>
-      'When on, USB output prefers the selected sample rate below.';
-
-  @override
   String get dsdOutputStrategy => 'DSD output strategy';
 
   @override
@@ -957,21 +938,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String exportedTo(String path) {
     return 'Exported to $path';
   }
-
-  @override
-  String get probeDescription =>
-      'Check USB permission, Audio Class descriptors and interface claim capability.';
-
-  @override
-  String get probeWaitingAuth => 'Waiting for USB authorization.';
-
-  @override
-  String probeClaimable(int count) {
-    return 'Claimable · $count audio interface(s)';
-  }
-
-  @override
-  String get probeCannotClaim => 'Could not claim a USB Audio Interface.';
 
   @override
   String get speaker => 'Speaker';
