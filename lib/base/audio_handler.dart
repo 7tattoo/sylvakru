@@ -1310,6 +1310,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     final format = song.format?.toLowerCase().trim();
     if (format != null && format.isNotEmpty) {
       if (format.contains('flac')) return 'flac';
+      // wavpack 须在 wav 之前判定，否则被 contains('wav') 误归为 wav
+      if (format.contains('wavpack') || format == 'wv') return 'wv';
       if (format.contains('wav') || format.contains('wave')) return 'wav';
       if (format.contains('dsf')) return 'dsf';
       if (format.contains('dff')) return 'dff';
@@ -1318,6 +1320,7 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
 
     final path = (song.path ?? song.cachePath ?? '').toLowerCase();
     if (path.endsWith('.flac')) return 'flac';
+    if (path.endsWith('.wv')) return 'wv';
     if (path.endsWith('.wav') || path.endsWith('.wave')) return 'wav';
     if (path.endsWith('.dsf')) return 'dsf';
     if (path.endsWith('.dff')) return 'dff';

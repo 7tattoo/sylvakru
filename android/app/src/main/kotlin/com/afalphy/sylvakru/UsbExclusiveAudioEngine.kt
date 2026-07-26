@@ -1043,6 +1043,9 @@ class UsbExclusiveAudioEngine(
             } else if (!streaming && isCompleteFlacFile(filePath, sourceFormat)) {
                 // 完整本地 FLAC 走 libFLAC 保真实位深；打开失败会在函数内回退系统解码
                 flacDecodeAndWrite(file, target, preRollMs)
+            } else if (!streaming && isCompleteWavPackFile(filePath, sourceFormat)) {
+                // 完整本地 WavPack 走 libwavpack（系统 MediaCodec 无 WavPack 解码器）
+                wavpackDecodeAndWrite(file, target, preRollMs)
             } else {
                 decodeAndWrite(file, target, streaming, streamTotalBytes, preRollMs)
             }
@@ -3766,6 +3769,15 @@ class UsbExclusiveAudioEngine(
         return sourceFormat == "flac" || lower.endsWith(".flac")
     }
 
+    /** 完整本地 WavPack（非 .part）走 libwavpack 原生解码；下载中不支持流式独占。 */
+    private fun isCompleteWavPackFile(filePath: String, sourceFormat: String?): Boolean {
+        val lower = filePath.lowercase(Locale.ROOT)
+        if (lower.endsWith(".part")) {
+            return false
+        }
+        return sourceFormat == "wv" || sourceFormat == "wavpack" || lower.endsWith(".wv")
+    }
+
     /**
      * 完整本地 FLAC 的独占解码循环：用 libFLAC 输出交错 S32LE 并保留源文件真实
      * 有效位深，绕开部分厂商 MediaCodec 把 24-bit FLAC 压成 16-bit 的问题。
@@ -3787,6 +3799,43 @@ class UsbExclusiveAudioEngine(
             decodeAndWrite(file, target, preRollMs = preRollMs)
             return
         }
+        nativePcmDecodeAndWrite(decoder, "libFLAC", file, target, preRollMs)
+    }
+
+    /**
+     * 完整本地 WavPack (.wv) 的独占解码循环：系统 MediaCodec 没有 WavPack
+     * 解码器，start 前已用 libwavpack 探测过可解；此处打开失败属异常
+     * （文件损坏/被删），与解码中途失败同语义报错停播，绝不静默从头重播。
+     */
+    private fun wavpackDecodeAndWrite(
+        file: File,
+        target: OutputTarget,
+        preRollMs: Int = 0,
+    ) {
+        val decoder = try {
+            UsbWavPackDecoder.open(file.absolutePath)
+        } catch (error: Throwable) {
+            UsbDiagnostics.w(tag, "libwavpack open failed for ${file.name}.", error)
+            sessionBroken = true
+            emitError(error.message ?: "Failed to open WavPack file.")
+            hardCloseSession("decode worker failed")
+            return
+        }
+        nativePcmDecodeAndWrite(decoder, "libwavpack", file, target, preRollMs)
+    }
+
+    /**
+     * 原生解码器（libFLAC/libwavpack）共用的独占解码主循环：输出交错 S32LE
+     * 并保留源文件真实有效位深；播放中途解码失败与 decodeAndWrite 同语义
+     * 报错停播，绝不静默从头重播。
+     */
+    private fun nativePcmDecodeAndWrite(
+        decoder: UsbNativePcmDecoder,
+        decoderLabel: String,
+        file: File,
+        target: OutputTarget,
+        preRollMs: Int = 0,
+    ) {
         val sampleRate = decoder.sampleRate
         val channels = decoder.channels
         val validBits = decoder.validBitsPerSample
@@ -3794,7 +3843,7 @@ class UsbExclusiveAudioEngine(
         val durationMs = decoder.durationMs.takeIf { decoder.totalFrames > 0 }
         UsbDiagnostics.i(
             tag,
-            "libFLAC decoder opened file=${file.name}, sampleRate=$sampleRate, channels=$channels, " +
+            "$decoderLabel decoder opened file=${file.name}, sampleRate=$sampleRate, channels=$channels, " +
                 "validBits=$validBits, totalFrames=${decoder.totalFrames}, " +
                 "endpointInterval=${target.endpoint.interval}",
         )
@@ -3808,7 +3857,7 @@ class UsbExclusiveAudioEngine(
         var lastPacketizerWithAudio: PcmIsoPacketizer? = null
         // 一次拉取的帧数：约 85ms@48k，够小保证暂停/seek 响应，够大摊薄 JNI 开销
         val chunkFrames = 4096
-        val chunkBytes = chunkFrames * channels * UsbFlacDecoder.BYTES_PER_SAMPLE
+        val chunkBytes = chunkFrames * channels * UsbNativePcmDecoder.BYTES_PER_SAMPLE
         val buffer = ByteBuffer.allocateDirect(chunkBytes).order(ByteOrder.LITTLE_ENDIAN)
         val chunk = ByteArray(chunkBytes)
 
@@ -3818,7 +3867,7 @@ class UsbExclusiveAudioEngine(
                 channels,
                 validBits,
                 target,
-                inputBytesPerSampleOverride = UsbFlacDecoder.BYTES_PER_SAMPLE,
+                inputBytesPerSampleOverride = UsbNativePcmDecoder.BYTES_PER_SAMPLE,
             )
             packetizer = writer
             if (preRollPending) {
@@ -3845,7 +3894,7 @@ class UsbExclusiveAudioEngine(
                         volumeControlEnabled,
                     ),
                     "message" to "USB exclusive decoding ${file.name} to ${target.endpointLabel} " +
-                        "(libFLAC, ${validBits}-bit), channels=$channels.",
+                        "($decoderLabel, ${validBits}-bit), channels=$channels.",
                 ),
             )
 
@@ -3870,7 +3919,7 @@ class UsbExclusiveAudioEngine(
                 if (stopped.get()) break
 
                 consumePendingSeekMs()?.let { seekMs ->
-                    UsbDiagnostics.i(tag, "exclusive libFLAC seek to ${seekMs}ms.")
+                    UsbDiagnostics.i(tag, "exclusive $decoderLabel seek to ${seekMs}ms.")
                     // 与系统解码路径同策略：不 flush 在途 URB，旧缓冲淡出后新位置淡入
                     writer.writeTransitionTail(USB_PAUSE_RESUME_FADE_MS, 0)
                     val maxFrame = decoder.totalFrames.takeIf { it > 0 } ?: Long.MAX_VALUE
@@ -3899,7 +3948,7 @@ class UsbExclusiveAudioEngine(
                 if (frames == 0) {
                     continue
                 }
-                val bytes = frames * channels * UsbFlacDecoder.BYTES_PER_SAMPLE
+                val bytes = frames * channels * UsbNativePcmDecoder.BYTES_PER_SAMPLE
                 buffer.position(0)
                 buffer.get(chunk, 0, bytes)
                 writer.write(if (bytes == chunk.size) chunk else chunk.copyOf(bytes))
@@ -3927,14 +3976,14 @@ class UsbExclusiveAudioEngine(
                 }
             }
 
-            UsbDiagnostics.i(tag, "exclusive libFLAC decode reached end of stream, flushing remainder.")
+            UsbDiagnostics.i(tag, "exclusive $decoderLabel decode reached end of stream, flushing remainder.")
             (lastPacketizerWithAudio ?: packetizer)?.let(::finishPcmPacketizer)
             if (!stopped.get()) {
                 workerEndedAtEof = true
                 updateState(inactiveState("USB exclusive playback completed."))
             }
         } catch (error: Throwable) {
-            UsbDiagnostics.w(tag, "Exclusive libFLAC playback failed.", error)
+            UsbDiagnostics.w(tag, "Exclusive $decoderLabel playback failed.", error)
             sessionBroken = true
             emitError(error.message ?: "USB exclusive playback failed.")
         } finally {
@@ -5690,6 +5739,11 @@ class UsbExclusiveAudioEngine(
             // 与 FLAC 流式独占同等对待；wv/ape 等系统不支持的不会以 .part 走到这里。
             val ext = effective.substringAfterLast('.', "")
             return ext in streamableLossyExts
+        }
+        // 完整 WavPack 由 libwavpack 解码（系统 MediaCodec 不支持）：能打开的
+        // PCM 1-2 声道非浮点文件放行独占，浮点/DSD 封装等回退共享输出
+        if (isCompleteWavPackFile(filePath, sourceFormat)) {
+            return UsbWavPackDecoder.canDecode(filePath)
         }
         // 完整文件的其余格式（m4a/AAC、mp3、ogg 等）以系统解码器能力为准：MediaCodec 能解出 PCM
         // 就走独占直驱；系统解不了的容器（WavPack/APE 等）判为不支持，交由 Dart 侧回退共享输出——

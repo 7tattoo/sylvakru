@@ -1,6 +1,5 @@
 package com.afalphy.sylvakru
 
-import java.io.Closeable
 import java.io.IOException
 import java.nio.ByteBuffer
 
@@ -37,19 +36,17 @@ internal object UsbFlacNative {
  */
 class UsbFlacDecoder private constructor(
     private var handle: Long,
-    val sampleRate: Int,
-    val channels: Int,
-    val validBitsPerSample: Int,
-    val totalFrames: Long,
-) : Closeable {
-    val durationMs: Long get() = if (sampleRate > 0) totalFrames * 1000L / sampleRate else 0L
-
+    override val sampleRate: Int,
+    override val channels: Int,
+    override val validBitsPerSample: Int,
+    override val totalFrames: Long,
+) : UsbNativePcmDecoder {
     /**
      * 解码最多 [capacityFrames] 帧到 [buffer]（必须是容量足够的 direct buffer，
      * 每帧 channels × 4 字节）。返回写入帧数；流已结束且无数据可读时返回 -1；
      * 解码失败抛 [IOException]，调用方不得静默回退从头播放。
      */
-    fun readFrames(buffer: ByteBuffer, capacityFrames: Int): Int {
+    override fun readFrames(buffer: ByteBuffer, capacityFrames: Int): Int {
         check(handle != 0L) { "UsbFlacDecoder 已关闭" }
         val frames = UsbFlacNative.readFrames(handle, buffer, capacityFrames)
         if (frames < 0) {
@@ -62,7 +59,7 @@ class UsbFlacDecoder private constructor(
     }
 
     /** 定位到绝对帧位置；失败抛 [IOException]，解码器状态保持可继续使用。 */
-    fun seekToFrame(frame: Long) {
+    override fun seekToFrame(frame: Long) {
         check(handle != 0L) { "UsbFlacDecoder 已关闭" }
         val error = UsbFlacNative.seekToFrame(handle, frame)
         if (error != null) {
