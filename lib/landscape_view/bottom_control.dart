@@ -88,18 +88,6 @@ class BottomControl extends StatelessWidget {
                 return ListTile(
                   leading: Hero(
                     tag: 'cover',
-                    flightShuttleBuilder:
-                        (
-                          flightContext,
-                          animation,
-                          flightDirection,
-                          fromHeroContext,
-                          toHeroContext,
-                        ) => FittedBox(
-                          child: flightDirection == .push
-                              ? toHeroContext.widget
-                              : fromHeroContext.widget,
-                        ),
                     child: CoverArtWidget(
                       size: 50,
                       borderRadius: 5,

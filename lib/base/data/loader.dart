@@ -59,11 +59,11 @@ class Loader {
 
     await playlistManager.load();
 
-    await audioHandler.loadPlayQueueState();
-    await audioHandler.loadPlayState();
-    await audioHandler.loadEqualizerState();
+    await audioHandler.loadStates();
 
-    layersManager.switchRootLayer('songs');
+    if (!isTV) {
+      layersManager.switchRootLayer('songs');
+    }
   }
 
   static Future<void> _prepareForSync(SourceType sourceType) async {

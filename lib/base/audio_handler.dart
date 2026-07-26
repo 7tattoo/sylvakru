@@ -179,6 +179,9 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
   late final File _playQueueState;
   late final File _playState;
   late final File _equalizerState;
+  late final File _positionState;
+
+  Timer? _positionTimer;
 
   bool isLoading = false;
   bool isSyncing = false;
@@ -228,6 +231,12 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
 
     currentSongNotifier.addListener(() {
       needPause = false;
+      if (viewModeNotifier.value == .bigPicture) {
+        if (useCurrentSongForBg) {
+          colorManager.updateBigPictureRelatedColors(currentSongNotifier.value);
+        }
+        return;
+      }
       layersManager.updateBackground();
     });
 
@@ -549,10 +558,16 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
 
   /// 用系统输出（media_kit）打开歌曲并按当前播放状态起播。
   /// 供 load() 非独占分支与独占意外中断回退续播复用。
-  Future<void> _openPlayerMedia(MyAudioMetadata currentSong) async {
+  Future<void> _openPlayerMedia(
+    MyAudioMetadata currentSong, {
+    Duration? start,
+  }) async {
     final shouldPlay = isPlayingNotifier.value;
     if (currentSong.cacheExist) {
-      await _player.open(Media(currentSong.cachePath!), play: false);
+      await _player.open(
+        Media(currentSong.cachePath!, start: start),
+        play: false,
+      );
       await _applySharedReplayGain(
         outputUserVolume(active: false, requested: volumeNotifier.value),
         establishBaseline: true,
@@ -585,7 +600,11 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     }
     resource ??= currentSong.path!;
     await _player.open(
-      Media(resource, httpHeaders: needHeader ? webdavClient?.headers : null),
+      Media(
+        resource,
+        httpHeaders: needHeader ? webdavClient?.headers : null,
+        start: start,
+      ),
       play: false,
     );
     await _applySharedReplayGain(
@@ -677,6 +696,11 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     if (!(_equalizerState.existsSync())) {
       saveEqualizerState();
     }
+
+    _positionState = File("${appSupportDir.path}/position_state.json");
+    if (!(_positionState.existsSync())) {
+      _positionState.writeAsString(Duration.zero.inMilliseconds.toString());
+    }
   }
 
   List<MyAudioMetadata> _restoreQueue(List<dynamic>? rawList) {
@@ -690,7 +714,13 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     return result;
   }
 
-  Future<void> loadPlayQueueState() async {
+  Future<void> loadStates() async {
+    await _loadPlayQueueState();
+    await _loadPlayState();
+    await _loadEqualizerState();
+  }
+
+  Future<void> _loadPlayQueueState() async {
     final content = await _playQueueState.readAsString();
 
     final json = jsonDecode(content) as Map<String, dynamic>;
@@ -708,7 +738,7 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     );
   }
 
-  Future<void> loadPlayState() async {
+  Future<void> _loadPlayState() async {
     final content = await _playState.readAsString();
     final Map<String, dynamic> json =
         jsonDecode(content) as Map<String, dynamic>;
@@ -756,7 +786,20 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       return;
     }
     currentIndex = restored;
-    await load();
+    // 上游“记住播放位置”：从上次退出保存的位置继续（保持我们的延迟恢复流程）
+    final positionMs = await _positionState.readAsString();
+    await load(start: Duration(milliseconds: int.tryParse(positionMs) ?? 0));
+    if (isPlayingNotifier.value) {
+      _startPositionTimer();
+    }
+  }
+
+  // 每秒把当前位置写入文件，重启后由 restoreCurrentSong 恢复（上游同款）；
+  // getPosition 在独占激活时返回独占位置，独占播放同样适用
+  void _startPositionTimer() {
+    _positionTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      _positionState.writeAsString(getPosition().inMilliseconds.toString());
+    });
   }
 
   void savePlayState() {
@@ -772,7 +815,10 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     );
   }
 
-  Future<void> loadEqualizerState() async {
+  Future<void> _loadEqualizerState() async {
+    if (!isPremiumNotifier.value) {
+      return;
+    }
     final content = await _equalizerState.readAsString();
     gains = (jsonDecode(content) as List<dynamic>).cast();
     applyEqualizer();
@@ -818,8 +864,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
   void singlePlay(MyAudioMetadata song) async {
     if (insert2Next(song)) {
       await skipToNext();
-      play();
     }
+    play();
   }
 
   Future<void> setPlayQueue(List<MyAudioMetadata> source) async {
@@ -975,6 +1021,7 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       return;
     }
     currentCoverArtColor = coverArtColor;
+    updateHoverFocusColor();
     contrastColorTheme = ContrastColorGenerator.generate(currentCoverArtColor);
     if (lyricsPageThemeNotifier.value == .vivid) {
       colorManager.updateLyricsPageColors();
@@ -985,7 +1032,7 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     }
   }
 
-  Future<void> load() async {
+  Future<void> load({Duration? start}) async {
     _cancelVolumeRamp();
     _cancelOutputGainRamp();
     final generation = ++_loadGeneration;
@@ -1072,6 +1119,10 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       }
       if (openedExclusive) {
         await _stopPlayerForUsbExclusive();
+        // 记住播放位置：独占链路用 seek 恢复起播位置（seek 内部处理独占分支）
+        if (start != null && start > Duration.zero) {
+          await seek(start);
+        }
         if (isPlayingNotifier.value) {
           _playLastSyncTime = DateTime.now();
         }
@@ -1086,7 +1137,7 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
           isLoading = false;
           return;
         }
-        await _openPlayerMedia(currentSong);
+        await _openPlayerMedia(currentSong, start: start);
       }
 
       if (isPlayingNotifier.value) {
@@ -1105,13 +1156,14 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
 
     updateServiceMediaItem(currentSong);
 
+    final startPosition = start ?? Duration.zero;
     if (isPlayingNotifier.value) {
-      unawaited(_superLyric.publishAt(Duration.zero));
+      unawaited(_superLyric.publishAt(startPosition));
     } else {
       _superLyric.reset();
       unawaited(_superLyric.sendStop());
     }
-    updatePlaybackState(postion: Duration.zero);
+    updatePlaybackState(postion: startPosition);
     _prefetchNextSongCache();
   }
 
@@ -1591,6 +1643,9 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       _scheduleOutputGainRamp();
       unawaited(_superLyric.publishAt(state.position));
       updatePlaybackState(postion: state.position);
+      if (state.playing) {
+        _startPositionTimer();
+      }
       return;
     }
 
@@ -1601,6 +1656,7 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       await _stopPlayerForUsbExclusive();
       unawaited(_superLyric.publishAt(_usbExclusivePosition));
       updatePlaybackState(postion: _usbExclusivePosition);
+      _startPositionTimer();
       return;
     }
 
@@ -1610,6 +1666,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
 
     unawaited(_superLyric.publishAt(_player.state.position));
     updatePlaybackState();
+
+    _startPositionTimer();
   }
 
   @override
@@ -1625,6 +1683,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       _superLyric.reset();
       updateIsPlaying(state.playing);
       updatePlaybackState(postion: state.position);
+      _positionTimer?.cancel();
+      _positionTimer = null;
       return;
     }
 
@@ -1633,6 +1693,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     _superLyric.reset();
     updateIsPlaying(false);
     updatePlaybackState();
+    _positionTimer?.cancel();
+    _positionTimer = null;
   }
 
   @override
@@ -1650,6 +1712,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     _superLyric.reset();
     updateIsPlaying(false);
     updatePlaybackState(stop: true);
+    _positionTimer?.cancel();
+    _positionTimer = null;
   }
 
   @override

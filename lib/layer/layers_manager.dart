@@ -33,7 +33,6 @@ import 'package:sylvakru/base/data/playlist.dart';
 import 'package:sylvakru/base/utils/metadata_utils.dart';
 
 final layersManager = LayersManager();
-MyAudioMetadata? backgroundSong;
 
 class LayerInfo {
   MyAudioMetadata? backgroundSong;
@@ -205,6 +204,9 @@ class LayersManager {
   }
 
   void pushDetail(String label, dynamic detail) async {
+    if (viewModeNotifier.value == .bigPicture) {
+      return;
+    }
     final rootLayer = getRootLayer(label);
 
     late GlobalKey<NavigatorState> rootKey;
@@ -387,7 +389,7 @@ class LayersManager {
   }
 
   Future<void> updateBackground() async {
-    if (topRootLayer == null) {
+    if (topRootLayer == null || viewModeNotifier.value == .bigPicture) {
       return;
     }
 

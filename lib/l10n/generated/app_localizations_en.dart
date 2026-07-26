@@ -1093,4 +1093,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lyricsParseFailed => 'Lyrics parsing failed';
+
+  @override
+  String get switchMode => 'Switch Mode';
+
+  @override
+  String get viewLog => 'View Log';
+
+  @override
+  String trialRemainingStatus(int count) {
+    return 'Premium trial active\n$count min remaining';
+  }
+
+  @override
+  String get trialRemaining => 'Trial Remaining';
+
+  @override
+  String get bigPictureMode => 'Big Picture Mode';
+
+  @override
+  String get bigPictureModeDescription => 'Unlock Big Picture Mode';
 }

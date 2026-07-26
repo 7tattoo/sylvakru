@@ -191,18 +191,10 @@ Widget showPlayQueueButton(double size, {Color? iconColor}) {
           if (playQueue.isEmpty) {
             return;
           }
-          if (isMobile) {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              builder: (context) {
-                return PlayQueueSheet();
-              },
-            );
-          } else {
+          if (!isMobile || isTV) {
             Navigator.push(
               context,
-              PageRouteBuilder(
+              _NoSecondaryAnimationPageRoute(
                 opaque: false,
                 barrierColor: Colors.black.withAlpha(25),
                 barrierDismissible: true,
@@ -216,10 +208,7 @@ Widget showPlayQueueButton(double size, {Color? iconColor}) {
                         builder: (context, value, child) {
                           return Material(
                             elevation: 1,
-                            color: Color.alphaBlend(
-                              colorManager.getSpecificBgColor(),
-                              colorManager.getSpecificBgBaseColor(),
-                            ),
+                            color: Colors.transparent,
                             shape: SmoothRectangleBorder(
                               smoothness: 1,
                               borderRadius: BorderRadius.horizontal(
@@ -227,7 +216,12 @@ Widget showPlayQueueButton(double size, {Color? iconColor}) {
                               ),
                             ),
                             clipBehavior: Clip.antiAliasWithSaveLayer,
-                            child: SizedBox(
+                            child: AnimatedContainer(
+                              duration: Duration(milliseconds: 250),
+                              color: Color.alphaBlend(
+                                colorManager.getSpecificBgColor(),
+                                colorManager.getSpecificBgBaseColor(),
+                              ),
                               width: max(
                                 350,
                                 MediaQuery.widthOf(context) * 0.2,
@@ -254,9 +248,33 @@ Widget showPlayQueueButton(double size, {Color? iconColor}) {
                 },
               ),
             );
+            return;
           }
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            builder: (context) {
+              return PlayQueueSheet();
+            },
+          );
         },
       );
     },
   );
+}
+
+class _NoSecondaryAnimationPageRoute<T> extends PageRouteBuilder {
+  _NoSecondaryAnimationPageRoute({
+    required super.pageBuilder,
+    required super.transitionsBuilder,
+    super.opaque,
+    super.barrierColor,
+    super.barrierDismissible,
+  });
+
+  @override
+  DelegatedTransitionBuilder? get delegatedTransition =>
+      (context, animation, secondaryAnimation, allowSnapshotting, child) {
+        return child;
+      };
 }

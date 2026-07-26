@@ -60,8 +60,6 @@ class SongList extends StatefulWidget {
 
   final SourceType sourceType;
 
-  final Function(BuildContext)? switchCallBack;
-
   const SongList({
     super.key,
     this.playlist,
@@ -72,7 +70,6 @@ class SongList extends StatefulWidget {
     this.isRecently = false,
     this.isRoot = true,
     this.sourceType = .local,
-    this.switchCallBack,
   });
 
   @override
@@ -390,6 +387,14 @@ class _SongListState extends State<SongList> {
                     : Hero(
                         tag: (song == null ? sourceType.name : song.id) + title,
                         transitionOnUserGestures: true,
+                        flightShuttleBuilder:
+                            (
+                              flightContext,
+                              animation,
+                              flightDirection,
+                              fromHeroContext,
+                              toHeroContext,
+                            ) => FittedBox(child: toHeroContext.widget),
                         child: coverArt,
                       );
               },

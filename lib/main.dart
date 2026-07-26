@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_gamepads/flutter_gamepads.dart';
+import 'package:liquid_glass_widgets/liquid_glass_setup.dart';
 import 'package:sylvakru/base/services/color_manager.dart';
 import 'package:sylvakru/base/app.dart';
 import 'package:sylvakru/base/services/logger.dart';
@@ -33,6 +34,23 @@ Future<void> main() async {
   appSupportDir = await getApplicationSupportDirectory();
   tmpDir = await getTemporaryDirectory();
 
+  if (isTV) {
+    viewModeNotifier.value = .bigPicture;
+  } else {
+    final viewModeFile = File("${appSupportDir.path}/viewMode.json");
+    String viewMode = 'normal';
+    if (viewModeFile.existsSync()) {
+      viewMode = viewModeFile.readAsStringSync();
+    }
+    viewModeNotifier.value = ViewMode.values.firstWhere(
+      (e) => e.name == viewMode,
+      orElse: () => .normal,
+    );
+    viewModeNotifier.addListener(() {
+      viewModeFile.writeAsString(viewModeNotifier.value.name);
+    });
+  }
+
   await logger.init();
   if (isMobile) {
     screenRadius = await ScreenCornerRadius.get();
@@ -43,7 +61,7 @@ Future<void> main() async {
 
     keyboardInit();
 
-    await _setupMainWindow();
+    await _setupWindow();
     await _setupTray();
   }
 
@@ -53,12 +71,18 @@ Future<void> main() async {
 
   await Loader.init();
   await Loader.load();
+  await LiquidGlassWidgets.initialize();
+  if (isTV) {
+    FocusManager.instance.highlightStrategy =
+        FocusHighlightStrategy.alwaysTraditional;
+  }
   runApp(
     ListenableBuilder(
       listenable: Listenable.merge([
         localeNotifier,
         fontFamilyNotifier,
         mainPageThemeNotifier,
+        lightHoverFocusColorNotifier,
       ]),
       builder: (context, child) {
         return MaterialApp(
@@ -67,10 +91,10 @@ Future<void> main() async {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           title: 'Sylvaklu',
           theme: ThemeData(
-            focusColor: mainPageThemeNotifier.value == .dark
+            focusColor: lightHoverFocusColorNotifier.value
                 ? Colors.white.withAlpha(20)
                 : Colors.black.withAlpha(20),
-            hoverColor: mainPageThemeNotifier.value == .dark
+            hoverColor: lightHoverFocusColorNotifier.value
                 ? Colors.white.withAlpha(20)
                 : Colors.black.withAlpha(15),
             textTheme: Theme.of(context).textTheme.apply(
@@ -147,83 +171,91 @@ Future<void> main() async {
           home: child,
         );
       },
-      child: GamepadControl(
-        shortcuts: {
-          GamepadActivatorButton.a(): const ActivateIntent(),
-          GamepadActivatorButton.b(): const DismissIntent(),
-          GamepadActivatorButton.leftBumper(): const DirectionalFocusIntent(
-            TraversalDirection.left,
-          ),
-          GamepadActivatorButton.rightBumper(): const DirectionalFocusIntent(
-            TraversalDirection.right,
-          ),
+      child: Builder(
+        builder: (context) {
+          return GamepadControl(
+            shortcuts: {
+              GamepadActivatorButton.a(): const ActivateIntent(),
+              GamepadActivatorButton.b(): const DismissIntent(),
+              GamepadActivatorButton.leftBumper(): const DirectionalFocusIntent(
+                TraversalDirection.left,
+              ),
+              GamepadActivatorButton.rightBumper():
+                  const DirectionalFocusIntent(TraversalDirection.right),
 
-          GamepadActivatorButton.dpadUp(): const DirectionalFocusIntent(
-            TraversalDirection.up,
-          ),
-          GamepadActivatorButton.dpadDown(): const DirectionalFocusIntent(
-            TraversalDirection.down,
-          ),
-          GamepadActivatorButton.dpadLeft(): const DirectionalFocusIntent(
-            TraversalDirection.left,
-          ),
-          GamepadActivatorButton.dpadRight(): const DirectionalFocusIntent(
-            TraversalDirection.right,
-          ),
+              GamepadActivatorButton.dpadUp(): const DirectionalFocusIntent(
+                TraversalDirection.up,
+              ),
+              GamepadActivatorButton.dpadDown(): const DirectionalFocusIntent(
+                TraversalDirection.down,
+              ),
+              GamepadActivatorButton.dpadLeft(): const DirectionalFocusIntent(
+                TraversalDirection.left,
+              ),
+              GamepadActivatorButton.dpadRight(): const DirectionalFocusIntent(
+                TraversalDirection.right,
+              ),
 
-          GamepadActivatorAxis.leftStickUp(): const DirectionalFocusIntent(
-            TraversalDirection.up,
-          ),
-          GamepadActivatorAxis.leftStickDown(): const DirectionalFocusIntent(
-            TraversalDirection.down,
-          ),
-          GamepadActivatorAxis.leftStickLeft(): const DirectionalFocusIntent(
-            TraversalDirection.left,
-          ),
-          GamepadActivatorAxis.leftStickRight(): const DirectionalFocusIntent(
-            TraversalDirection.right,
-          ),
+              GamepadActivatorAxis.leftStickUp(): const DirectionalFocusIntent(
+                TraversalDirection.up,
+              ),
+              GamepadActivatorAxis.leftStickDown():
+                  const DirectionalFocusIntent(TraversalDirection.down),
+              GamepadActivatorAxis.leftStickLeft():
+                  const DirectionalFocusIntent(TraversalDirection.left),
+              GamepadActivatorAxis.leftStickRight():
+                  const DirectionalFocusIntent(TraversalDirection.right),
 
-          GamepadActivatorAxis.rightStickUp(): const ScrollIntent(
-            direction: AxisDirection.up,
-          ),
-          GamepadActivatorAxis.rightStickDown(): const ScrollIntent(
-            direction: AxisDirection.down,
-          ),
-          GamepadActivatorAxis.rightStickLeft(): const ScrollIntent(
-            direction: AxisDirection.left,
-          ),
-          GamepadActivatorAxis.rightStickRight(): const ScrollIntent(
-            direction: AxisDirection.right,
-          ),
-        },
-        repeatIntents: {
-          // add your new intents for hold repeat
-          const DirectionalFocusIntent(TraversalDirection.up),
-          const DirectionalFocusIntent(TraversalDirection.down),
-          const DirectionalFocusIntent(TraversalDirection.left),
-          const DirectionalFocusIntent(TraversalDirection.right),
-          // keep old ones if you still use them
-          const PreviousFocusIntent(),
-          const NextFocusIntent(),
+              GamepadActivatorAxis.rightStickUp(): const ScrollIntent(
+                direction: AxisDirection.up,
+              ),
+              GamepadActivatorAxis.rightStickDown(): const ScrollIntent(
+                direction: AxisDirection.down,
+              ),
+              GamepadActivatorAxis.rightStickLeft(): const ScrollIntent(
+                direction: AxisDirection.left,
+              ),
+              GamepadActivatorAxis.rightStickRight(): const ScrollIntent(
+                direction: AxisDirection.right,
+              ),
+            },
+            repeatIntents: {
+              // add your new intents for hold repeat
+              const DirectionalFocusIntent(TraversalDirection.up),
+              const DirectionalFocusIntent(TraversalDirection.down),
+              const DirectionalFocusIntent(TraversalDirection.left),
+              const DirectionalFocusIntent(TraversalDirection.right),
+              // keep old ones if you still use them
+              const PreviousFocusIntent(),
+              const NextFocusIntent(),
 
-          const ScrollIntent(direction: AxisDirection.up),
-          const ScrollIntent(direction: AxisDirection.down),
-          const ScrollIntent(direction: AxisDirection.left),
-          const ScrollIntent(direction: AxisDirection.right),
-        },
-        child: Builder(
-          builder: (context) {
-            return UsbAudioEventListener(
+              const ScrollIntent(direction: AxisDirection.up),
+              const ScrollIntent(direction: AxisDirection.down),
+              const ScrollIntent(direction: AxisDirection.left),
+              const ScrollIntent(direction: AxisDirection.right),
+            },
+            onBeforeIntent: (p0, p1) {
+              FocusManager.instance.highlightStrategy =
+                  FocusHighlightStrategy.alwaysTraditional;
+
+              if (p1 is DismissIntent) {
+                Navigator.of(context).maybePop();
+                return false;
+              }
+              return true;
+            },
+            // USB 独占事件监听保持在 ViewEntry 外层（fork 独占链路）
+            child: UsbAudioEventListener(
               child: MediaQuery.removePadding(
                 context: context,
                 removeLeft: true, // for mobile
                 removeRight: true,
-                child: ViewEntry(),
+                // semantics sometimes crash on ios simulator, I don't know why
+                child: ExcludeSemantics(child: ViewEntry()),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     ),
   );
@@ -238,10 +270,10 @@ Future<void> main() async {
   });
 }
 
-Future<void> _setupMainWindow() async {
+Future<void> _setupWindow() async {
   myWindowListener = MyWindowListener();
   WindowOptions windowOptions = WindowOptions(
-    size: mainSize,
+    size: viewModeNotifier.value == .mini ? miniSize : mainSize,
     center: true,
     backgroundColor: Colors.transparent,
     titleBarStyle: TitleBarStyle.hidden,
@@ -252,28 +284,48 @@ Future<void> _setupMainWindow() async {
     await windowManager.setPreventClose(true);
     await windowManager.show();
     await windowManager.focus();
-    // it's weird on linux: it needs 52 extra pixels, and setMinimumSize should be invoked at last
-    // windows need 16:9 extra pixels
-    await windowManager.setMinimumSize(
-      Platform.isLinux
-          ? Size(1102, 752)
-          : Platform.isWindows
-          ? Size(1050 + 16, 700 + 9)
-          : Size(1050, 700),
-    );
-    if (mainPosition != null) {
-      await windowManager.setPosition(mainPosition!);
+    if (viewModeNotifier.value == .mini) {
+      if (Platform.isWindows) {
+        await windowManager.setMinimumSize(Size(325 + 16, 150 + 9));
+        await windowManager.setMaximumSize(Size(600 + 16, 950 + 9));
+      } else {
+        await windowManager.setMinimumSize(Size(325, 150));
+        await windowManager.setMaximumSize(Size(600, 950));
+      }
+
+      if (miniPosition != null) {
+        await windowManager.setPosition(miniPosition!);
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          await Future.delayed(Duration(milliseconds: 250));
+          miniPosition = await windowManager.getPosition();
+        });
+      }
+      await windowManager.setAlwaysOnTop(true);
     } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await Future.delayed(Duration(milliseconds: 250));
-        mainPosition = await windowManager.getPosition();
-      });
-    }
-    if (mainMaximized) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await Future.delayed(Duration(milliseconds: 500));
-        await windowManager.maximize();
-      });
+      // it's weird on linux: it needs 52 extra pixels, and setMinimumSize should be invoked at last
+      // windows need 16:9 extra pixels
+      await windowManager.setMinimumSize(
+        Platform.isLinux
+            ? Size(1102, 752)
+            : Platform.isWindows
+            ? Size(1050 + 16, 700 + 9)
+            : Size(1050, 700),
+      );
+      if (mainPosition != null) {
+        await windowManager.setPosition(mainPosition!);
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          await Future.delayed(Duration(milliseconds: 250));
+          mainPosition = await windowManager.getPosition();
+        });
+      }
+      if (mainMaximized) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          await Future.delayed(Duration(milliseconds: 500));
+          await windowManager.maximize();
+        });
+      }
     }
   });
   windowManager.addListener(myWindowListener);

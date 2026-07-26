@@ -42,17 +42,19 @@ class VolumeBar extends StatelessWidget {
         child: ValueListenableBuilder(
           valueListenable: volumeNotifier,
           builder: (context, value, child) {
-            return Slider(
-              value: value,
-              min: 0,
-              max: 1,
-              onChanged: (value) {
-                volumeNotifier.value = value;
-                audioHandler.setVolume(value);
-              },
-              onChangeEnd: (value) {
-                audioHandler.savePlayState();
-              },
+            return ExcludeFocus(
+              child: Slider(
+                value: value,
+                min: 0,
+                max: 1,
+                onChanged: (value) {
+                  volumeNotifier.value = value;
+                  audioHandler.setVolume(value);
+                },
+                onChangeEnd: (value) {
+                  audioHandler.savePlayState();
+                },
+              ),
             );
           },
         ),

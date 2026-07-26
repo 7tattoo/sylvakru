@@ -205,6 +205,7 @@ class PlayQueuePageState extends State<PlayQueuePage> {
     final specificTextColor = colorManager.getSpecificTextColor();
     final specificHighlightText = colorManager.getSpecificHighlightTextColor();
 
+    bool isMouse = false;
     return ReorderableDragStartListener(
       key: ValueKey(index),
       index: index,
@@ -286,8 +287,47 @@ class PlayQueuePageState extends State<PlayQueuePage> {
                 style: TextStyle(fontSize: 12, color: specificTextColor),
               ),
             ),
-
+            onTapDown: (details) {
+              isMouse = true;
+            },
+            onTapCancel: () {
+              isMouse = false;
+            },
             onTap: () async {
+              if (!isMouse) {
+                showPlayQueueItemOptions(
+                  context,
+                  song,
+                  playNextCallback: () {
+                    audioHandler.insert2Next(song);
+                    audioHandler.saveAllStates();
+                    setState(() {});
+                  },
+                  removeCallback: () async {
+                    final removeCurrent = index == audioHandler.currentIndex;
+                    audioHandler.delete(index);
+
+                    if (playQueue.isEmpty) {
+                      while (Navigator.canPop(context)) {
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
+                      }
+                      await audioHandler.clear();
+                    } else {
+                      updateQueue(needJump: false);
+                      if (removeCurrent) {
+                        await audioHandler.load();
+                      }
+                    }
+
+                    audioHandler.saveAllStates();
+                  },
+                );
+                return;
+              }
+              isMouse = false;
+
               if (ctrlIsPressed) {
                 isSelected.value = !isSelected.value;
                 continuousSelectBeginIndex = index;

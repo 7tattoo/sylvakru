@@ -39,7 +39,18 @@ class _MiniViewState extends State<MiniView> {
   @override
   void initState() {
     super.initState();
-    colorManager.updateMiniViewColors();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      colorManager.updateMiniViewColors();
+      updateHoverFocusColor();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      updateHoverFocusColor();
+    });
+    super.dispose();
   }
 
   @override

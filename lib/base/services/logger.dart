@@ -7,6 +7,10 @@ final logger = Logger();
 class Logger {
   late File _file;
 
+  String _logContent = '';
+
+  String get logContent => _logContent;
+
   String _formatForFileName(DateTime t) {
     String two(int n) => n.toString().padLeft(2, '0');
 
@@ -27,12 +31,9 @@ class Logger {
 
   void output(String msg) {
     final time = DateTime.now().toIso8601String();
-
-    _file.writeAsStringSync(
-      '[$time] $msg\n',
-      mode: FileMode.append,
-      flush: true,
-    );
+    final content = '[$time] $msg\n';
+    _logContent += content;
+    _file.writeAsStringSync(content, mode: FileMode.append, flush: true);
   }
 
   /// 返回当前会话日志文件里包含 [needle] 的行（不区分大小写），最多保留尾部 [max] 行。

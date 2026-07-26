@@ -1,12 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:sylvakru/base/audio_handler.dart';
 import 'package:sylvakru/base/services/color_manager.dart';
 import 'package:sylvakru/base/app.dart';
 import 'package:sylvakru/base/asset_images.dart';
 import 'package:sylvakru/base/services/interaction.dart';
 import 'package:sylvakru/base/services/keyboard.dart';
 import 'package:sylvakru/base/services/my_window_listener.dart';
+import 'package:sylvakru/l10n/generated/app_localizations.dart';
 import 'package:sylvakru/layer/layers_manager.dart';
 import 'package:sylvakru/layer/lyrics_page_layer.dart';
 import 'package:sylvakru/mini_view/mini_view.dart';
@@ -127,7 +129,8 @@ class _TitleBarState extends State<TitleBar> {
           ValueListenableBuilder(
             valueListenable: isFullScreenNotifier,
             builder: (context, isFullScreen, child) {
-              return isFullScreen | isMobile
+              return (isFullScreen && viewModeNotifier.value != .bigPicture) |
+                      isMobile
                   ? SizedBox.shrink()
                   : ValueListenableBuilder(
                       valueListenable: lyricsPageForegroundColor.valueNotifier,
@@ -195,6 +198,37 @@ class _TitleBarState extends State<TitleBar> {
               layersManager.switchRootLayer('settings');
             },
             icon: ImageIcon(settingImage),
+          ),
+
+        if (widget.isMainPage)
+          IconButton(
+            onPressed: () async {
+              if (!isPremiumNotifier.value) {
+                showPremiumDialog(context);
+                return;
+              }
+              if (!await showConfirmDialog(
+                context,
+                AppLocalizations.of(context).switchMode,
+              )) {
+                return;
+              }
+              await Future.delayed(Duration(milliseconds: 250));
+
+              colorManager.updateBigPictureRelatedColors(
+                currentSongNotifier.value,
+              );
+              viewModeNotifier.value = .bigPicture;
+
+              WidgetsBinding.instance.addPostFrameCallback((_) async {
+                layersManager.popDetail('artists');
+                layersManager.popDetail('albums');
+                layersManager.popDetail('folders');
+                layersManager.popDetail('playlists');
+                while (await layersManager.popDetail('settings')) {}
+              });
+            },
+            icon: ImageIcon(bigPictureModeImage),
           ),
 
         if (!isMobile) windowControls(),
@@ -281,29 +315,6 @@ class _TitleBarState extends State<TitleBar> {
           builder: (context, _) {
             return Row(
               children: [
-                if (widget.isMainPage)
-                  IconButton(
-                    color: iconColor.value,
-                    onPressed: () async {
-                      if (!await showConfirmDialog(
-                        context,
-                        'Enter big picture mode',
-                      )) {
-                        return;
-                      }
-                      await Future.delayed(Duration(milliseconds: 250));
-                      viewModeNotifier.value = .bigPicture;
-
-                      WidgetsBinding.instance.addPostFrameCallback((_) async {
-                        layersManager.popDetail('artists');
-                        layersManager.popDetail('albums');
-                        layersManager.popDetail('folders');
-                        layersManager.popDetail('playlists');
-                        while (await layersManager.popDetail('settings')) {}
-                      });
-                    },
-                    icon: ImageIcon(bigPictueModeImage),
-                  ),
                 if (widget.isMainPage && !isMaximizedNotifier.value)
                   IconButton(
                     color: iconColor.value,

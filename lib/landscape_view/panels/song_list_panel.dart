@@ -334,8 +334,11 @@ extension _SongListPanel on _SongListState {
                                 songListManager.notEmptyCount >= 2) ...[
                               SizedBox(width: 15),
                               ElevatedButton(
-                                onPressed: () async {
-                                  widget.switchCallBack!(context);
+                                onPressed: () {
+                                  showSwitchDialogIfNeed(
+                                    context,
+                                    songListManager,
+                                  );
                                 },
                                 style: buttonStyle,
                                 child: Text(l10n.switch_),

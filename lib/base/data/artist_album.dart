@@ -240,6 +240,8 @@ class Artist extends ArtistAlbumBase {
 
   Set<Album> albumSet = {};
 
+  List<Album> albumList = [];
+
   void _fetchSongs(
     List<MyAudioMetadata> fromSongList,
     List<MyAudioMetadata> toSongList,
@@ -257,7 +259,7 @@ class Artist extends ArtistAlbumBase {
   void combineAlbums() {
     songListManager.clear();
     albumSet.removeWhere((album) => album.isEmpty);
-    final albumList = albumSet.toList();
+    albumList = albumSet.toList();
     albumList.sort((a, b) {
       int aYear = a.year ?? 9999;
       int bYear = b.year ?? 9999;

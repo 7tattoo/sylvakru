@@ -16,6 +16,7 @@ import 'package:sylvakru/landscape_view/landscape_view.dart';
 import 'package:sylvakru/landscape_view/sidebar.dart';
 import 'package:sylvakru/layer/layers_manager.dart';
 import 'package:sylvakru/layer/lyrics_page_layer.dart';
+import 'package:sylvakru/layer/premium_layer.dart';
 import 'package:sylvakru/mini_view/mini_view.dart';
 import 'package:sylvakru/portrait_view/portrait_view.dart';
 
@@ -29,11 +30,12 @@ class ViewEntry extends StatefulWidget {
 class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
   bool systemCanPop = false;
   Timer? _exitTimer;
+  int keyValue = 0;
   SystemUiMode? _appliedUiMode;
 
   // 系统 UI 模式只在目标变化时应用，不能放在 build 里每次重设：全面屏手势
   // 上滑时系统临时显示系统栏 → insets 变化触发重建 → 立刻又把栏藏回去，
-  // 返回桌面的手势被中断（平板宽屏沉浸模式下上滑卡住回不了桌面）。
+  // 返回桌面的手势被打断（平板宽屏沉浸模式下上滑卡住回不了桌面）。
   void _applySystemUiMode(SystemUiMode mode) {
     if (_appliedUiMode == mode) {
       return;
@@ -64,14 +66,22 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
       });
     }
 
-    if (Platform.isIOS || Platform.isMacOS) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (Platform.isIOS) {
-          await NativeMenu.init();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (Platform.isIOS) {
+        if (trialRemainingMinNotifier.value > 0) {
+          showCenterMessage(
+            context,
+            AppLocalizations.of(
+              context,
+            ).trialRemainingStatus(trialRemainingMinNotifier.value),
+            duration: 5000,
+          );
         }
+        await NativeMenu.init();
+      } else if (Platform.isMacOS) {
         await NativeMenu.initIcons();
-      });
-    }
+      }
+    });
 
     networkErrorNotifier.addListener(_onNetworkError);
   }
@@ -97,17 +107,23 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (Platform.isAndroid && state == AppLifecycleState.resumed) {
-      systemCanPop = false;
-      _exitTimer?.cancel();
-      // 回到前台系统可能已恢复系统栏，重新应用一次当前 UI 模式
-      final uiMode = _appliedUiMode;
-      if (uiMode != null) {
-        _appliedUiMode = null;
-        _applySystemUiMode(uiMode);
+    if (Platform.isAndroid) {
+      if (state == .resumed) {
+        systemCanPop = false;
+        _exitTimer?.cancel();
+        // 回到前台系统可能已恢复系统栏，重新应用一次当前 UI 模式
+        final uiMode = _appliedUiMode;
+        if (uiMode != null) {
+          _appliedUiMode = null;
+          _applySystemUiMode(uiMode);
+        }
+        // rebuild PopScope to allow it to handle pop
+        setState(() {
+          keyValue++;
+        });
+      } else if (isTV && state == .paused) {
+        audioHandler.pause();
       }
-      // rebuild PopScope to allow it to handle pop
-      setState(() {});
     }
   }
 
@@ -118,9 +134,9 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
     }
     return PopScope(
       canPop: false,
-      key: UniqueKey(),
+      key: ValueKey(keyValue),
       onPopInvokedWithResult: (didPop, result) async {
-        if (didPop | isTyping) {
+        if (didPop | isTyping | isTV) {
           return;
         }
         if (portraitKey.currentState?.isDrawerOpen ?? false) {
@@ -157,6 +173,7 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
           return MiniView();
         }
         if (viewMode == .bigPicture) {
+          _applySystemUiMode(SystemUiMode.immersiveSticky);
           return BigPictureView();
         }
         if (isTooNarrow(context)) {
@@ -164,7 +181,7 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
           return PortraitView();
         }
         // immersiveSticky：上滑临时显示的系统栏是透明浮层、不派发 insets
-        // 变化也会自动隐藏，全面屏手势可正常完成；immersive 会常驻显示
+        // 变化也会自动隐藏，全面屏手势可正常完成；immersive 被唤出后会常驻
         _applySystemUiMode(SystemUiMode.immersiveSticky);
         return LandscapeView();
       },

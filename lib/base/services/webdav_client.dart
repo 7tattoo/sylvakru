@@ -92,7 +92,7 @@ class WebDavClient {
       return parser(response);
     } on DioException catch (e) {
       logger.output(
-        '[WebDav] [$mark] Dio error: ${e.message} '
+        '[$runtimeType] [$mark] Dio error: ${e.message} '
         '(${e.response?.statusCode})',
       );
 
@@ -100,12 +100,13 @@ class WebDavClient {
         logger.output(e.response!.data.toString());
       }
 
-      reportNetworkError('WebDAV', e.message ?? 'network error');
+      reportNetworkError('$runtimeType', 'network error');
 
       return null;
     } catch (e) {
-      logger.output('[WebDav] [$mark] Unknown error: $e');
-      reportNetworkError('WebDAV', e.toString());
+      logger.output('[$runtimeType] [$mark] Unknown error: $e');
+      reportNetworkError('$runtimeType', 'network error');
+
       return null;
     }
   }

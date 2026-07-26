@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 /// Server clients (webdav/subsonic/navidrome/emby) run deep in the data
 /// layer with no BuildContext of their own, so failures can't call
@@ -20,5 +20,8 @@ void reportNetworkError(String sourceLabel, String message) {
   }
   _lastReportTime = now;
   lastNetworkErrorMessage = '$sourceLabel: $message';
-  networkErrorNotifier.value++;
+  // ensureInitialized：纯 Dart 测试环境（无 runApp）里 instance 会直接抛错
+  WidgetsFlutterBinding.ensureInitialized().addPostFrameCallback((_) {
+    networkErrorNotifier.value++;
+  });
 }

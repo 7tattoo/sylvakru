@@ -20,7 +20,6 @@ import 'package:sylvakru/portrait_view/sleep_timer.dart';
 import 'package:sylvakru/base/widgets/my_sheet.dart';
 import 'package:sylvakru/l10n/generated/app_localizations.dart';
 import 'package:sylvakru/base/widgets/lyric_list_view.dart';
-import 'package:sylvakru/base/widgets/play_queue_sheet.dart';
 import 'package:sylvakru/base/my_audio_metadata.dart';
 import 'package:sylvakru/base/data/playlist.dart';
 import 'package:sylvakru/base/widgets/seekbar.dart';
@@ -39,6 +38,8 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
   final dragOffsetNotifier = ValueNotifier(0.0);
 
   final canDragNotifier = ValueNotifier(false);
+
+  final draggingNotifier = ValueNotifier(false);
 
   int _animationDuration = 0;
 
@@ -69,6 +70,7 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
         return GestureDetector(
           onVerticalDragStart: value
               ? (_) {
+                  draggingNotifier.value = true;
                   concealRouteTimer?.cancel();
                   final route = ModalRoute.of(context);
                   if (route is DynamicLyricsPageRoute) {
@@ -98,6 +100,7 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
                     _animationDuration = 250;
                     dragOffsetNotifier.value = 0.0;
                     concealRouteTimer = Timer(Duration(milliseconds: 250), () {
+                      draggingNotifier.value = false;
                       final route = ModalRoute.of(context);
                       if (route is DynamicLyricsPageRoute) {
                         route.concealRoutesBelow();
@@ -111,6 +114,7 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
                   _animationDuration = 250;
                   dragOffsetNotifier.value = 0.0;
                   concealRouteTimer = Timer(Duration(milliseconds: 250), () {
+                    draggingNotifier.value = false;
                     final route = ModalRoute.of(context);
                     if (route is DynamicLyricsPageRoute) {
                       route.concealRoutesBelow();
@@ -145,17 +149,17 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
               ? SystemUiOverlayStyle.light
               : SystemUiOverlayStyle.dark,
           child: ValueListenableBuilder(
-            valueListenable: dragOffsetNotifier,
+            valueListenable: draggingNotifier,
             builder: (context, value, child) {
               return Material(
                 color: Colors.transparent,
                 shape: SmoothRectangleBorder(
                   smoothness: 1,
                   borderRadius: .circular(
-                    value > 0 ? screenRadius?.topLeft ?? 0 : 0,
+                    value ? screenRadius?.topLeft ?? 0 : 0,
                   ),
                 ),
-                clipBehavior: value > 0 ? .antiAliasWithSaveLayer : .none,
+                clipBehavior: value ? .antiAliasWithSaveLayer : .antiAlias,
                 child: child,
               );
             },
@@ -283,6 +287,14 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
       children: [
         Hero(
           tag: 'cover',
+          flightShuttleBuilder:
+              (
+                flightContext,
+                animation,
+                flightDirection,
+                fromHeroContext,
+                toHeroContext,
+              ) => FittedBox(child: toHeroContext.widget),
           child: CoverArtWidget(
             size: mobileWidth * 0.84,
             borderRadius: mobileWidth * 0.04,
@@ -501,22 +513,8 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
 
                 Spacer(),
 
-                IconButton(
-                  color: value,
+                showPlayQueueButton(32, iconColor: value),
 
-                  icon: const ImageIcon(playQueueImage, size: 32),
-
-                  onPressed: () {
-                    tryVibrate();
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (context) {
-                        return PlayQueueSheet();
-                      },
-                    );
-                  },
-                ),
                 SizedBox(width: 25),
               ],
             );

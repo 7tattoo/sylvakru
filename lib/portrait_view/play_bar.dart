@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sylvakru/base/app.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sylvakru/base/audio_handler.dart';
 import 'package:sylvakru/base/services/color_manager.dart';
 import 'package:sylvakru/base/asset_images.dart';
@@ -10,7 +10,6 @@ import 'package:sylvakru/base/utils/dynamic_lyrics_page_route.dart';
 import 'package:sylvakru/layer/layers_manager.dart';
 import 'package:sylvakru/layer/lyrics_page_layer.dart';
 import 'package:sylvakru/base/utils/metadata_utils.dart';
-import 'package:smooth_corner/smooth_corner.dart';
 import 'package:text_scroll/text_scroll.dart';
 
 class PlayBar extends StatelessWidget {
@@ -23,116 +22,100 @@ class PlayBar extends StatelessWidget {
       builder: (_, currentSong, _) {
         if (currentSong == null) return const SizedBox.shrink();
 
-        return SizedBox(
-          height: 50,
-          child: ListenableBuilder(
-            listenable: Listenable.merge([
-              layersManager.backgroundChangeNotifier,
-              playBarColor.valueNotifier,
-            ]),
-            builder: (context, child) {
-              return Material(
-                shape: SmoothRectangleBorder(
-                  smoothness: 1,
-                  borderRadius: BorderRadius.circular(
-                    25,
-                  ), // rounded half-circle ends
+        return ListenableBuilder(
+          listenable: Listenable.merge([
+            layersManager.backgroundChangeNotifier,
+            glassColor.valueNotifier,
+          ]),
+          builder: (context, child) {
+            return GlassContainer(
+              height: 50,
+              settings: LiquidGlassSettings(glassColor: glassColor.value),
+              shape: LiquidRoundedSuperellipse(borderRadius: 25),
+              clipBehavior: .antiAlias,
+              child: child,
+            );
+          },
+          child: InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                DynamicLyricsPageRoute(
+                  pageBuilder: (_, _, _) => LyricsPageLayer(),
                 ),
-                color: Color.alphaBlend(
-                  playBarColor.value,
-                  mainPageThemeNotifier.value == .vivid
-                      ? backgroundCoverArtColor.withAlpha(180)
-                      : Colors.transparent,
-                ),
-                clipBehavior: .antiAlias,
-                child: child,
               );
             },
-            child: InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  DynamicLyricsPageRoute(
-                    pageBuilder: (_, _, _) => LyricsPageLayer(),
-                  ),
-                );
-              },
 
-              child: Row(
-                children: [
-                  const SizedBox(width: 15),
-                  Hero(
-                    tag: 'cover',
-                    flightShuttleBuilder:
-                        (
-                          flightContext,
-                          animation,
-                          flightDirection,
-                          fromHeroContext,
-                          toHeroContext,
-                        ) => FittedBox(
-                          child: flightDirection == .push
-                              ? toHeroContext.widget
-                              : fromHeroContext.widget,
-                        ),
-                    child: CoverArtWidget(
-                      size: 35,
-                      borderRadius: 3,
-                      song: currentSong,
-                    ),
+            child: Row(
+              children: [
+                const SizedBox(width: 15),
+                Hero(
+                  tag: 'cover',
+                  flightShuttleBuilder:
+                      (
+                        flightContext,
+                        animation,
+                        flightDirection,
+                        fromHeroContext,
+                        toHeroContext,
+                      ) => FittedBox(child: toHeroContext.widget),
+                  child: CoverArtWidget(
+                    size: 35,
+                    borderRadius: 3,
+                    song: currentSong,
                   ),
+                ),
 
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextScroll(
-                      "${getTitle(currentSong)} - ${getArtist(currentSong)}",
-                      key: ValueKey(currentSong),
-                      velocity: const Velocity(pixelsPerSecond: Offset(40, 0)),
-                      style: TextStyle(fontSize: 16),
-                      intervalSpaces: 10,
-                      pauseBetween: Duration(seconds: 1),
-                    ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextScroll(
+                    "${getTitle(currentSong)} - ${getArtist(currentSong)}",
+                    key: ValueKey(currentSong),
+                    velocity: const Velocity(pixelsPerSecond: Offset(40, 0)),
+                    style: TextStyle(fontSize: 16),
+                    intervalSpaces: 10,
+                    pauseBetween: Duration(seconds: 1),
                   ),
+                ),
 
-                  // Play/Pause Button
-                  SizedBox(
-                    width: 40,
-                    child: IconButton(
-                      icon: ValueListenableBuilder(
-                        valueListenable: isPlayingNotifier,
-                        builder: (_, isPlaying, _) {
-                          return ImageIcon(
-                            isPlaying ? pauseCircleImage : playCircleFillImage,
-                            size: 25,
-                          );
-                        },
-                      ),
-
-                      onPressed: () {
-                        tryVibrate();
-                        audioHandler.togglePlay();
-                      },
-                    ),
-                  ),
-                  SizedBox(
-                    width: 40,
-                    child: IconButton(
-                      icon: Icon(Icons.playlist_play_rounded, size: 30),
-                      onPressed: () {
-                        tryVibrate();
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          builder: (context) {
-                            return PlayQueueSheet();
-                          },
+                // Play/Pause Button
+                SizedBox(
+                  width: 40,
+                  child: IconButton(
+                    icon: ValueListenableBuilder(
+                      valueListenable: isPlayingNotifier,
+                      builder: (_, isPlaying, _) {
+                        return ImageIcon(
+                          isPlaying ? pauseCircleImage : playCircleFillImage,
+                          size: 25,
                         );
                       },
                     ),
+
+                    onPressed: () {
+                      tryVibrate();
+                      audioHandler.togglePlay();
+                    },
                   ),
-                  const SizedBox(width: 15),
-                ],
-              ),
+                ),
+                SizedBox(
+                  width: 40,
+                  child: IconButton(
+                    icon: Icon(Icons.playlist_play_rounded, size: 30),
+                    onPressed: () {
+                      tryVibrate();
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        builder: (context) {
+                          return PlayQueueSheet();
+                        },
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 15),
+              ],
             ),
           ),
         );

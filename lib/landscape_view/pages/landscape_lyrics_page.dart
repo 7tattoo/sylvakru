@@ -29,13 +29,13 @@ class LandscapeLyricsPage extends StatefulWidget {
 }
 
 class _LandscapeLyricsPageState extends State<LandscapeLyricsPage> {
-  final ValueNotifier<bool> immersiveModeNotifier = ValueNotifier(false);
   Timer? immersiveModeTimer;
+  final ValueNotifier<bool> immersiveModeNotifier = ValueNotifier(false);
 
   @override
   void dispose() {
-    immersiveModeNotifier.dispose();
     immersiveModeTimer?.cancel();
+    immersiveModeNotifier.dispose();
     super.dispose();
   }
 
@@ -111,6 +111,14 @@ class _LandscapeLyricsPageState extends State<LandscapeLyricsPage> {
                         Spacer(),
                         Hero(
                           tag: 'cover',
+                          flightShuttleBuilder:
+                              (
+                                flightContext,
+                                animation,
+                                flightDirection,
+                                fromHeroContext,
+                                toHeroContext,
+                              ) => FittedBox(child: toHeroContext.widget),
                           child: GestureDetector(
                             onVerticalDragEnd: (details) {
                               if (isMobile &&
@@ -359,11 +367,15 @@ class _LandscapeLyricsPageState extends State<LandscapeLyricsPage> {
                   playModeButton(25, iconColor: value),
                   Spacer(),
 
+                  if (isTV) rewindButton(25, iconColor: value),
+
                   skip2PreviousButton(25, iconColor: value),
 
                   playOrPauseButton(35, iconColor: value),
 
                   skip2NextButton(25, iconColor: value),
+
+                  if (isTV) forwardButton(25, iconColor: value),
 
                   Spacer(),
                   showPlayQueueButton(25, iconColor: value),

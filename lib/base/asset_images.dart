@@ -4,7 +4,7 @@ const AssetImage addImage = AssetImage('assets/images/add.png');
 const AssetImage albumImage = AssetImage('assets/images/album.png');
 const AssetImage arrowDownImage = AssetImage('assets/images/arrow_down.png');
 const AssetImage artistImage = AssetImage('assets/images/artist.png');
-const AssetImage bigPictueModeImage = AssetImage(
+const AssetImage bigPictureModeImage = AssetImage(
   'assets/images/big_picture_mode.png',
 );
 const AssetImage cacheImage = AssetImage('assets/images/cache.png');
@@ -50,6 +50,7 @@ const AssetImage minimizeImage = AssetImage('assets/images/minimize.png');
 const AssetImage musicNoteImage = AssetImage('assets/images/music_note.png');
 const AssetImage navidromeImage = AssetImage('assets/images/navidrome.png');
 const AssetImage nextButtonImage = AssetImage('assets/images/next_button.png');
+const AssetImage optionImage = AssetImage('assets/images/option.png');
 const AssetImage pauseCircleImage = AssetImage(
   'assets/images/pause_circle.png',
 );

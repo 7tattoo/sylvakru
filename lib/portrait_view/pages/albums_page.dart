@@ -165,7 +165,7 @@ extension _AlbumsPage on _AlbumsLayerState {
           crossAxisCount = (mobileWidth / 120).toInt();
           coverArtWidth = mobileWidth / crossAxisCount - 35;
         }
-        double radius = useLargePicture ? 10 : 6;
+        double radius = coverArtWidth / 10;
         return GridView.builder(
           padding: EdgeInsets.symmetric(horizontal: 16),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(

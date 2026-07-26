@@ -13,6 +13,7 @@ import 'package:sylvakru/base/services/interaction.dart';
 import 'package:sylvakru/base/services/logger.dart';
 import 'package:sylvakru/base/services/subsonic_client.dart';
 import 'package:sylvakru/base/services/webdav_client.dart';
+import 'package:sylvakru/base/utils/format_duration.dart';
 import 'package:sylvakru/base/utils/media_query.dart';
 import 'package:sylvakru/base/utils/source_type.dart';
 import 'package:sylvakru/base/widgets/connect_client_widget.dart';
@@ -23,6 +24,7 @@ import 'package:sylvakru/layer/layers_manager.dart';
 import 'package:sylvakru/base/widgets/manage_music_folders.dart';
 import 'package:sylvakru/base/data/library.dart';
 import 'package:sylvakru/base/data/loader.dart';
+import 'package:sylvakru/layer/premium_layer.dart';
 import 'package:sylvakru/portrait_view/sleep_timer.dart';
 import 'package:sylvakru/l10n/generated/app_localizations.dart';
 import 'package:sylvakru/base/widgets/my_switch.dart';
@@ -40,7 +42,10 @@ class SettingsList extends StatelessWidget {
     bool isLandscape = !isTooNarrow(context);
     return CustomScrollView(
       slivers: [
-        if (isLandscape)
+        if (viewModeNotifier.value == .bigPicture)
+          sliverBox(const SizedBox(height: 10)),
+
+        if (isLandscape && viewModeNotifier.value != .bigPicture)
           sliverBox(
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -58,7 +63,7 @@ class SettingsList extends StatelessWidget {
                           ? 15
                           : Platform.isIOS
                           ? 14
-                          : 12,
+                          : 13,
                     ),
                     style: TextStyle(fontSize: 12),
                   ),
@@ -67,7 +72,7 @@ class SettingsList extends StatelessWidget {
             ),
           ),
 
-        if (isLandscape)
+        if (isLandscape && viewModeNotifier.value != .bigPicture)
           sliverBox(
             MyDivider(
               thickness: 0.5,
@@ -78,9 +83,10 @@ class SettingsList extends StatelessWidget {
             ),
           ),
 
-        if (isLandscape) sliverBox(const SizedBox(height: 10)),
+        if (isLandscape && viewModeNotifier.value != .bigPicture)
+          sliverBox(const SizedBox(height: 10)),
 
-        if (Platform.isIOS)
+        if (Platform.isIOS && viewModeNotifier.value != .bigPicture)
           sliverBox(
             paddingIfNeed(isLandscape, premiumFeaturesListTile(context, l10n)),
           ),
@@ -103,9 +109,10 @@ class SettingsList extends StatelessWidget {
 
         sliverBox(paddingIfNeed(isLandscape, languageListTile(context, l10n))),
 
-        sliverBox(paddingIfNeed(isLandscape, fontListTile(context, l10n))),
+        if (viewModeNotifier.value != .bigPicture)
+          sliverBox(paddingIfNeed(isLandscape, fontListTile(context, l10n))),
 
-        if (isMobile)
+        if (isMobile && !isTV)
           sliverBox(paddingIfNeed(isLandscape, vibrationListTile(l10n))),
 
         if (isMobile)
@@ -131,25 +138,26 @@ class SettingsList extends StatelessWidget {
         if (!Platform.isIOS)
           sliverBox(paddingIfNeed(isLandscape, checkUpdate(context, l10n))),
 
-        if (isMobile)
-          sliverBox(
-            paddingIfNeed(isLandscape, exportLogListTile(context, l10n)),
-          ),
+        sliverBox(paddingIfNeed(isLandscape, viewLogListTile(context, l10n))),
 
-        sliverBox(
-          paddingIfNeed(
-            isLandscape,
-            ListTile(
-              leading: ImageIcon(infoImage, size: iconSize),
-              title: Text(l10n.about),
-              onTap: () {
-                layersManager.pushDetail('settings', 'about');
-              },
+        if (viewModeNotifier.value != .bigPicture)
+          sliverBox(
+            paddingIfNeed(
+              isLandscape,
+              ListTile(
+                leading: ImageIcon(infoImage, size: iconSize),
+                title: Text(l10n.about),
+                onTap: () {
+                  layersManager.pushDetail('settings', 'about');
+                },
+              ),
             ),
           ),
-        ),
 
         if (!isLandscape) sliverBox(const SizedBox(height: 100)),
+
+        if (viewModeNotifier.value == .bigPicture)
+          sliverBox(const SizedBox(height: 75)),
       ],
     );
   }
@@ -162,7 +170,9 @@ class SettingsList extends StatelessWidget {
 
   Widget paddingForLandscape(Widget child) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 30),
+      padding: EdgeInsets.symmetric(
+        horizontal: viewModeNotifier.value == .bigPicture ? 50 : 30,
+      ),
       child: SmoothClipRRect(
         smoothness: 1,
         borderRadius: BorderRadius.circular(10),
@@ -313,6 +323,22 @@ class SettingsList extends StatelessWidget {
       onTap: () {
         layersManager.pushDetail('settings', 'premium');
       },
+      trailing: ValueListenableBuilder(
+        valueListenable: trialRemainingMinNotifier,
+        builder: (context, value, child) {
+          if (value <= 0) {
+            return SizedBox.shrink();
+          }
+          return Row(
+            mainAxisSize: .min,
+            children: [
+              Text(
+                "${l10n.trialRemaining}:${formatDuration(Duration(minutes: value), ms: false)}",
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -602,6 +628,7 @@ class SettingsList extends StatelessWidget {
                                       return;
                                     }
                                     mainPageThemeNotifier.value = .vivid;
+                                    updateHoverFocusColor();
                                   },
                                   trailing: ValueListenableBuilder(
                                     valueListenable: isPremiumNotifier,
@@ -619,6 +646,7 @@ class SettingsList extends StatelessWidget {
                                   title: Text(l10n.lightMode),
                                   onTap: () {
                                     mainPageThemeNotifier.value = .light;
+                                    updateHoverFocusColor();
                                   },
                                   trailing: value == .light
                                       ? Icon(Icons.check)
@@ -628,6 +656,7 @@ class SettingsList extends StatelessWidget {
                                   title: Text(l10n.darkMode),
                                   onTap: () {
                                     mainPageThemeNotifier.value = .dark;
+                                    updateHoverFocusColor();
                                   },
                                   trailing: value == .dark
                                       ? Icon(Icons.check)
@@ -915,27 +944,69 @@ class SettingsList extends StatelessWidget {
     );
   }
 
-  Widget exportLogListTile(BuildContext context, AppLocalizations l10n) {
+  Widget viewLogListTile(BuildContext context, AppLocalizations l10n) {
     return ListTile(
       leading: ImageIcon(exportLogImage, size: iconSize),
 
-      title: Text(l10n.exportLog),
+      title: Text(l10n.viewLog),
       onTap: () async {
-        String? result;
-        if (Platform.isAndroid) {
-          result = await FilePicker.getDirectoryPath();
-          if (result == null) {
-            return;
-          }
-          logger.export2Directory(result);
-          if (context.mounted) {
-            showCenterMessage(context, 'Export to $result');
-          }
-        } else {
-          result = '${appDocsDir.path}/logs';
-          logger.export2Directory(result);
-          showCenterMessage(context, 'Export to Sylvakru/logs');
-        }
+        showAnimationDialog(
+          context: context,
+          child: SizedBox(
+            width: isTooNarrow(context) ? 300 : 400,
+            height: MediaQuery.heightOf(context) * 0.8,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: SelectableText(logger.logContent),
+                    ),
+                  ),
+                  SizedBox(height: 20),
+                  if (isMobile)
+                    ValueListenableBuilder(
+                      valueListenable: buttonColor.valueNotifier,
+                      builder: (context, value, child) {
+                        return ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: buttonColor.value,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            padding: EdgeInsets.all(10),
+                          ),
+                          onPressed: () async {
+                            String? result;
+                            if (Platform.isAndroid) {
+                              result = await FilePicker.getDirectoryPath();
+                              if (result == null) {
+                                return;
+                              }
+                              logger.export2Directory(result);
+                              if (context.mounted) {
+                                showCenterMessage(context, 'Export to $result');
+                              }
+                            } else {
+                              result = '${appDocsDir.path}/logs';
+                              logger.export2Directory(result);
+                              showCenterMessage(
+                                context,
+                                'Export to Sylvakru/logs',
+                              );
+                            }
+                          },
+                          child: Text(l10n.exportLog),
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
       },
     );
   }

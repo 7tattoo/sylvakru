@@ -78,12 +78,14 @@ class EmbyClient {
         logger.output(e.response!.data.toString());
       }
 
-      reportNetworkError('Emby', e.message ?? 'network error');
+      reportNetworkError('$runtimeType', 'network error');
 
       return null;
     } catch (e) {
       logger.output('[Emby] Unknown error: $e');
-      reportNetworkError('Emby', e.toString());
+
+      reportNetworkError('$runtimeType', 'network error');
+
       return null;
     }
   }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:sylvakru/base/audio_handler.dart';
 import 'package:sylvakru/base/data/library.dart';
 import 'package:sylvakru/base/data/playlist.dart';
+import 'package:sylvakru/base/services/color_manager.dart';
 import 'package:sylvakru/base/services/interaction.dart';
 import 'package:sylvakru/base/services/usb_audio_preferences.dart';
 import 'package:sylvakru/base/widgets/lyric_list_view.dart';
@@ -65,6 +66,8 @@ class Setting {
     if (!isPremiumNotifier.value && mainPageThemeNotifier.value == .vivid) {
       mainPageThemeNotifier.value = .light;
     }
+
+    updateHoverFocusColor();
 
     lyricsPageThemeNotifier.value = ThemeType.values.firstWhere(
       (e) => e.name == json['lyricsPageTheme'],

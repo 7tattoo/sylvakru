@@ -28,67 +28,75 @@ class _Add2PlaylistPanelState extends State<Add2PlaylistPanel> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    final specificTextColor = colorManager.getSpecificTextColor();
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        lyricsPageForegroundColor.valueNotifier,
+        miniViewForegroundColor.valueNotifier,
+      ]),
+      builder: (context, _) {
+        final specificTextColor = colorManager.getSpecificTextColor();
 
-    return Column(
-      children: [
-        ListTile(
-          leading: SmoothClipRRect(
-            smoothness: 1,
-            borderRadius: BorderRadius.circular(4),
-            child: Container(
-              color: Colors.white30,
-              child: ImageIcon(
-                addImage,
-                size: 40,
-                color: colorManager.getSpecificIconColor(),
+        return Column(
+          children: [
+            ListTile(
+              leading: SmoothClipRRect(
+                smoothness: 1,
+                borderRadius: BorderRadius.circular(4),
+                child: Container(
+                  color: Colors.white30,
+                  child: ImageIcon(
+                    addImage,
+                    size: 40,
+                    color: colorManager.getSpecificIconColor(),
+                  ),
+                ),
+              ),
+              title: Text(
+                l10n.createPlaylist,
+                style: TextStyle(fontSize: 14, color: specificTextColor),
+              ),
+              onTap: () async {
+                if (await showCreatePlaylistDialog(context)) {
+                  setState(() {});
+                }
+              },
+            ),
+            SizedBox(height: 5),
+            Divider(
+              height: 1,
+              thickness: 0.5,
+              color: colorManager.getSpecificDividerColor(),
+            ),
+            SizedBox(height: 5),
+            Expanded(
+              child: ListView.builder(
+                itemCount: playlistManager.playlists.length,
+                itemExtent: 54,
+                itemBuilder: (_, index) {
+                  final playlist = playlistManager.getPlaylistByIndex(index);
+                  return ListTile(
+                    leading: CoverArtWidget(
+                      size: 40,
+                      borderRadius: 4,
+                      song: playlist.getCoverSong(),
+                    ),
+                    title: Text(
+                      index == 0 ? l10n.favorites : playlist.name,
+                      style: TextStyle(fontSize: 14, color: specificTextColor),
+                    ),
+
+                    onTap: () {
+                      playlist.add(widget.songList);
+                      showCenterMessage(context, l10n.added2Playlist);
+                      Navigator.pop(context);
+                    },
+                  );
+                },
               ),
             ),
-          ),
-          title: Text(
-            l10n.createPlaylist,
-            style: TextStyle(fontSize: 14, color: specificTextColor),
-          ),
-          onTap: () async {
-            if (await showCreatePlaylistDialog(context)) {
-              setState(() {});
-            }
-          },
-        ),
-        SizedBox(height: 5),
-        Divider(
-          height: 1,
-          thickness: 0.5,
-          color: colorManager.getSpecificDividerColor(),
-        ),
-        SizedBox(height: 5),
-        Expanded(
-          child: ListView.builder(
-            itemCount: playlistManager.playlists.length,
-            itemExtent: 54,
-            itemBuilder: (_, index) {
-              final playlist = playlistManager.getPlaylistByIndex(index);
-              return ListTile(
-                leading: CoverArtWidget(
-                  size: 40,
-                  borderRadius: 4,
-                  song: playlist.getCoverSong(),
-                ),
-                title: Text(
-                  index == 0 ? l10n.favorites : playlist.name,
-                  style: TextStyle(fontSize: 14, color: specificTextColor),
-                ),
-
-                onTap: () {
-                  playlist.add(widget.songList);
-                  showCenterMessage(context, l10n.added2Playlist);
-                  Navigator.pop(context);
-                },
-              );
-            },
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
