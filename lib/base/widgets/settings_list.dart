@@ -835,7 +835,7 @@ class SettingsList extends StatelessWidget {
       title: Text(l10n.checkUpdate),
       onTap: () async {
         final url = Uri.parse(
-          'https://api.github.com/repos/AfalpHy/sylvakru/releases/latest',
+          'https://api.github.com/repos/huya688zdx/sylvakru/releases/latest',
         );
 
         try {
@@ -907,7 +907,7 @@ class SettingsList extends StatelessWidget {
                                 ElevatedButton(
                                   onPressed: () => launchUrl(
                                     Uri.parse(
-                                      "https://github.com/AfalpHy/sylvakru/releases/latest",
+                                      "https://github.com/huya688zdx/sylvakru/releases/latest",
                                     ),
                                   ),
                                   style: ElevatedButton.styleFrom(
