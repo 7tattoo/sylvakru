@@ -34,7 +34,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 class SettingsList extends StatelessWidget {
   final double? iconSize;
-  const SettingsList({super.key, this.iconSize});
+  final VoidCallback? onAudioOutputTap;
+
+  const SettingsList({super.key, this.iconSize, this.onAudioOutputTap});
 
   @override
   Widget build(BuildContext context) {
@@ -539,6 +541,10 @@ class SettingsList extends StatelessWidget {
       subtitle: Text(l10n.audioOutputSubtitle),
       trailing: const Icon(Icons.chevron_right_rounded),
       onTap: () {
+        if (onAudioOutputTap != null) {
+          onAudioOutputTap!();
+          return;
+        }
         layersManager.pushDetail('settings', 'audio_output');
       },
     );

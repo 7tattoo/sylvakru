@@ -15,6 +15,7 @@ import 'package:sylvakru/base/services/interaction.dart';
 import 'package:sylvakru/base/services/usb_audio_preferences.dart';
 import 'package:sylvakru/base/services/usb_audio_service.dart';
 import 'package:sylvakru/base/utils/media_query.dart';
+import 'package:sylvakru/base/utils/zoom_page_route.dart';
 import 'package:sylvakru/base/widgets/audio_output_panel.dart';
 import 'package:sylvakru/base/widgets/my_sheet.dart';
 import 'package:sylvakru/base/widgets/my_switch.dart';
@@ -33,6 +34,22 @@ enum AudioOutputSettingsPageKind {
   overview,
   dsdMode,
   replayGain,
+}
+
+void pushBigPictureAudioOutputSettings(
+  BuildContext context, {
+  AudioOutputSettingsPageKind pageKind = AudioOutputSettingsPageKind.overview,
+}) {
+  unawaited(
+    Navigator.of(context).push<void>(
+      ZoomPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: panelColor.value,
+          body: AudioOutputSettingsLayer(pageKind: pageKind),
+        ),
+      ),
+    ),
+  );
 }
 
 String _transportHealthLabel(UsbTransportHealth health, AppLocalizations l10n) {
@@ -76,6 +93,9 @@ class _AudioOutputSettingsLayerState extends State<AudioOutputSettingsLayer> {
 
   @override
   Widget build(BuildContext context) {
+    if (viewModeNotifier.value == .bigPicture) {
+      return panelView(context);
+    }
     if (isTooNarrow(context)) {
       return pageView(context);
     }
@@ -149,6 +169,13 @@ class _AudioOutputSettingsLayerState extends State<AudioOutputSettingsLayer> {
                   title: _l10n.dsdMode,
                   value: _dsdModeLabel(prefs.dsdModeNotifier.value),
                   onTap: () {
+                    if (viewModeNotifier.value == .bigPicture) {
+                      pushBigPictureAudioOutputSettings(
+                        context,
+                        pageKind: AudioOutputSettingsPageKind.dsdMode,
+                      );
+                      return;
+                    }
                     layersManager.pushDetail('settings', 'usb_dsd_mode');
                   },
                 ),
@@ -233,6 +260,13 @@ class _AudioOutputSettingsLayerState extends State<AudioOutputSettingsLayer> {
                       title: _l10n.replayGain,
                       value: _replayGainLabel(mode),
                       onTap: () {
+                        if (viewModeNotifier.value == .bigPicture) {
+                          pushBigPictureAudioOutputSettings(
+                            context,
+                            pageKind: AudioOutputSettingsPageKind.replayGain,
+                          );
+                          return;
+                        }
                         layersManager.pushDetail('settings', 'usb_replay_gain');
                       },
                     );
