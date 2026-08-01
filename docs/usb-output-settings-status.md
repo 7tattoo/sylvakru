@@ -1,51 +1,94 @@
-# USB 输出设置接入状态
+# USB 独占当前接入状态
 
-本文档记录 `USB 输出设置` 页面各项与当前真实播放链路的对应关系。状态以代码、自动测试和已有设备证据为准；尚未完成本轮真机验收的行为会明确标注，不因代码已接入就写成“真机已验证”。
+本文记录当前 USB 独占播放链路的真实实现边界和验证级别。它不再按旧设置页逐项列举，也不把已经删除的设置或历史占位项写成现有能力。
 
-## 已接入运行链路
+源码移植见 [USB 独占完整接入指南](usb-exclusive-integration-guide.md)，接口字段见 [USB 独占接口参考](usb-exclusive-native-api.md)，设备适配见 [USB DAC 适配指南](dac-adaptation-guide.md)。
 
-| 项目 | 状态 | 说明 |
+## 状态口径
+
+- **已接入**：生产路径已经调用该实现。
+- **自动测试覆盖**：存在 C++、Kotlin 或 Dart 回归测试；不等于 DAC 真机已验证。
+- **有设备证据**：至少有项目现有 DAC 日志或实播证据。
+- **仍需逐设备验证**：能力与描述符、固件或厂商协议相关，不能从代码存在推断所有 DAC 可用。
+
+## Native 与平台边界
+
+| 模块 | 当前状态 | 实现边界 | 验证 |
+| --- | --- | --- | --- |
+| Android native 构建 | 已接入 | CMake 3.22.1、C++17；libFLAC 1.5.0 与 WavPack 5.9.0 源码静态链接到 `sylvakru_usb_exclusive` | arm64 NDK/Gradle 构建路径已接入 |
+| USBDEVFS ISO 传输 | 已接入 | `usb_exclusive_engine.cpp` 以句柄保存 fd、端点、反馈、URB 和统计；依赖 Android/Linux，不是平台无关模块 | 现有实播链路使用；仍需不同 USB 控制器回归 |
+| FLAC 解码 | 已接入 | `flac_decoder.cpp` 输出交错 S32LE，保留 16/20/24/32 有效位深 | C++ fixture 测试；本地 FLAC 生产路径使用 |
+| WavPack 解码 | 已接入 | `wavpack_decoder.cpp` 解码 PCM WavPack；DSD WavPack、浮点和 legacy 不支持时回退 | C++ 往返测试；生产路径使用 |
+| DSD 容器与打包 | 已接入 | `usb_dsd.cpp` 负责 DSF/DFF、DoP 和 Native DSD；`UsbDsd.kt` 是 JNI 薄包装 | `usb_dsd_test.cpp` 对拍；DSD 实播仍需逐 DAC 验证 |
+| UAC 描述符解析 | 已接入 | `usb_uac.cpp` 负责 AS 格式、时钟源、Feature Unit 和输出端子纯解析；Kotlin 做结构化映射和控制传输 | `usb_uac_test.cpp` 对拍；不同 UAC1/UAC2 描述符仍需设备回归 |
+| DAC quirk 匹配 | 已接入 | C++ 负责键匹配和位完美采样率选择；Kotlin 负责 JSON、asset、override 和字段解析 | C++ 匹配测试 + Kotlin JSON 测试 |
+| 音量协议核心 | 已接入 | C++ 负责 Q16/milli-dB、自动位深、iBasso 报文和安全决策；Kotlin 负责 USB 读写、事务、generation 和健康状态 | C++ 数值/报文测试 + Kotlin 会话测试；私有协议只对精确设备有效 |
+| PCM 分包计算 | 已接入 | `usb_pcm_packetizer.cpp` 负责槽位转换、数字增益、淡入淡出和反馈包长；Kotlin 负责缓冲、worker 和 URB 节奏 | `usb_pcm_packetizer_test.cpp` 对拍，包含 DoP unity 红线 |
+| JNI 边界 | 已接入 | 所有句柄、扁平数组和无状态函数统一进入 `sylvakru_usb_exclusive` | arm64 链接验证；ABI 变化需双侧同步 |
+
+## Android 与业务链路
+
+| 能力 | 当前状态 | 说明 |
 | --- | --- | --- |
-| Android USB 插入声明 | 已接入 | `AndroidManifest.xml` 已声明 `android.hardware.usb.action.USB_DEVICE_ATTACHED`，`usb_audio_device_filter.xml` 已包含 USB Audio Class 和 Macaron VID/PID。`dumpsys usb` 能看到 `com.afalphy.sylvakru.debug` 注册到 `device_attached_activities`。 |
-| USB 设备识别 | 已接入 | 通过 Android 侧 USB/AudioDevice 状态回传，设置页能显示 DAC 名称、USB ID、系统输出设备、采样率和编码等信息。 |
-| USB 权限与独占诊断 | 已接入 | `probeExclusiveAccess()` 会检查 USB 权限、Audio Interface 数量、claim 能力和原始描述符长度。 |
-| 固定采样率输出 | 部分接入 | 偏好已用于 `preferredExclusiveSampleRate()` 和系统 preferred output 请求；真实独占写流仍要看底层能力是否支持对应采样率。 |
-| PCM 位深偏好 | 部分接入 | `UsbAudioPreferences.preferredEncoding()` 会把 `16/24/32 bits` 映射到 Android PCM encoding，用于输出偏好请求。 |
-| USB 独占播放状态 | 已接入 | `UsbExclusivePlaybackState` 由 start/pause/resume/seek/stop 和约 250ms 的位置更新回传，承载真实播放状态、格式、位深和音量处理字段；缓冲水位另由专门的 `UsbTransportTelemetry` 上报。 |
-| 前台缓冲区 / 后台缓冲区 | 已接入 | App 生命周期变化和设置修改会把当前目标水位传给 native 独占引擎；传输状态卡按前台/后台目标计算进度与低水位阈值，不再只是保存偏好。 |
-| 后台保活 | 已接入偏好 | 偏好已持久化，并用于 App 内 USB 输出策略判断；是否能完全防止系统杀后台取决于系统电池策略。 |
-| 播放后释放 USB 带宽 | 已接入偏好 | 偏好已保存，供停止播放后释放 USB 资源策略使用。 |
-| DSD 模式和 DSD 转 PCM 采样率 | 部分接入 | `.dsf/.dff` 已进曲库（`dsd_metadata.dart` 手工解析头部与 DSF 尾部 ID3）。`PCM` 模式：DSD 文件不进独占，由共享路径（mpv）解码转 PCM，DSD64/128/256/512 转 PCM 目标采样率作为系统 preferred output 请求生效。`DoP` 模式：独占链路已实现（`DsdFileReader`→`DopPacketizer`→ISO 打包，时钟设为 DSD 速率÷16，需设备提供 24/32-bit alt），暂停发 DoP 封装的 0x69 静音、seek/切歌不断流。`Native` 模式：描述符声明 RAW_DATA alt（UAC2 bmFormats D31）或 quirk 指定 `nativeDsd.format` 时按字节排列（u8/u16le/u32le/u32be）直发原始 DSD（时钟 SET_CUR 为容器帧率，DSD128 u32le→176400，与 ALSA runtime rate 语义一致），判定失败自动降级 DoP 并在 state message 注明原因；会话级编码器/空窗静音填充/不 flush 策略与 DoP 一致。真机验证待做（Macaron 是否声明 RAW_DATA 以新包诊断报告/日志为准；未声明时自动回退 DoP，可通过 quirk `nativeDsd.format` 强制指定排列试验）。 |
-| ReplayGain | 已接入 | 设置可选按音轨、按专辑或关闭；首选标签缺失时回退另一类标签，并结合 peak/当前用户音量限制输出余量。共享输出通过播放器 `volume-gain` 应用；USB PCM 数字音量、标准硬件音量和已实现的厂商协议都接收同一首歌的 ReplayGain。曲目切换、模式切换以及云端缓存成功补齐并落库标签后会立即重新计算当前歌曲，不修改 DoP/Native DSD 码流。 |
-| 硬件音量协议与安全回退 | 已接入 | 标准 UAC1/UAC2 Feature Unit 支持能力探测、GET/RANGE、SET 后 readback、多声道失败回滚；状态中的 raw、gain 和 `readbackVerified` 来自实际读回，不使用请求值冒充。厂商协议通过 `UsbVolumeProtocol` 能力抽象选择，由精确 quirk 启用，不按厂商 VID 猜测。iBasso 多寄存器写入任一阶段失败会尝试完整事务回滚；HID 响应持续失败时，旧 reader 在有界期限内退出才重启一次，期限内未退出则直接标为 `writeOnly=true, readbackVerified=false`，已重启的 reader 再失败也采用相同降级。PCM 可回退数字音量，DSD 不修改码流。 |
-| DAC 外置按钮双向同步 | 已接入代码，待本轮真机验收 | `ibassoDc03Pro` 已实现 HID IN command response、写确认和 unsolicited/button event 分流，事件去抖后把 DAC 实际左右声道音量同步到 App、音量浮层和 MediaSession；DAC 主动事件不会再次写回 DAC，避免反馈环。当前协议与自动测试已接入，Macaron 外置按钮全场景仍需本轮真机验收；其他设备只有在协议明确声明 unsolicited 能力后才能启用。 |
-| 手机后台/熄屏物理音量键 | 已接入代码，待本轮真机验收 | USB 独占且真实硬件音量或 PCM 数字音量有效时，audio_service 发布 0–100 绝对远程音量，由 MediaSession 在 App 后台/熄屏处理手机物理键并下发同一音量链路；相同 playback info 已去重。RAW、非独占、以及无硬件音量的 1-bit DSD 使用本地系统音量；退出独占立即恢复 `LocalAndroidPlaybackInfo`。旧 Activity 前台按键拦截已删除。黑屏、退到后台和退出 App 后的系统行为待本轮真机验收。 |
-| DSD 增益补偿 | 已接入已验证协议 | 偏好范围会随播放请求和运行中调整下发。对 `ibassoDc03Pro`，补偿按每步 `0.5 dB` 换算并只写 DAC 的 DSD 音量寄存器；PCM 寄存器、DoP 标记和 Native DSD 原始数据均不修改。厂商协议必须声明 `dsdGain` 能力且 quirk 未禁用；标准 UAC 还必须由 quirk 显式设置 `dsdSupported:true`，未知能力一律不调整 DSD 增益。 |
-| 音量平滑交接 | 已接入 | 新建可读硬件音量连接时先读取 DAC 当前值；启用平滑交接则采用设备实际音量同步 App，避免连接瞬间覆盖。PCM 在数字与硬件路径切换时使用 6 步、每步 20ms 的增益斜坡；退出硬件模式先建立数字衰减，再恢复 DAC 满电平。DSD 不做软件斜坡，避免修改 1-bit 数据。 |
-| 真实音量处理状态显示 | 已接入 | 页面直接读取 native state 的 `hardwareVolumeActive`、`digitalVolumeActive`、协议、write-only/readback 状态和 ReplayGain，而不是根据设置选项猜测；实际回退数字音量时显示数字音量，已验证 DAC 控制时显示硬件音量，未验证/未应用会明确标注。 |
-| DAC quirk 配置 | 已接入 | 内置 `assets/usb_dac_quirks.json` + 本地 override（设置页“导入 quirk 配置”粘贴 JSON），匹配优先精确 VID/PID。当前生效字段：`dop.supported/maxDsd`、`clock.setCurDelayMs/skipGetCurValidation`、`nativeDsd.format/maxDsd`，以及 `hardwareVolume.enabled/dsdSupported/featureUnitId/controlInterface/channels/protocol/recipient/range`。厂商默认项仅能承载逐产品验证的共同能力，私有硬件音量协议必须精确匹配。诊断报告包含 quirk 匹配/加载错误、Feature Unit 探测、实际 hardware/digital/writeOnly/readback 状态和 RAW_DATA alt。 |
-| 云端来源独占策略 | 已接入（待真机验证） | Navidrome/WebDAV/Emby 未缓存曲目：后台下载缓存，约 10 秒水位且下载速度跟得上时用 `.part` 文件流式独占（引擎按增长中的文件读取，数据没跟上时 PCM 按暂停处理、DoP 垫 0x69 静音，不断流不爆音）；4 秒内达不到水位回退共享流式立即出声。独占开启时预取队列下一首云端歌曲，连播场景直接整首缓存走独占。PCM 独占的 seek/手动切歌/停止一律不 `flushOutput`（与 DoP/native 同策略）：丢在途 URB 会瞬断 ISO 流产生小音爆，改为旧缓冲放完后无缝续上新位置/新曲，代价是 seek/切歌延迟约一个水位（海贝同款行为）。流式独占（`.part` 下载未完成）读到数据末尾（seek 落在尚未下载的区段、或顺序播到当前下载末尾）时**不再误判成播放结束去跳下一首**：回到当前位置每 80ms 重探一次，等下载推进后继续（缓冲等待，可被停止/暂停/新 seek 打断）。此前 `getSize()` 返回 -1 使 `MediaExtractor` seek 到未下载时间点直接判 EOS→`readSampleData` 返回 -1→`completed`→跳歌+DAC 重锁爆音。 |
+| USB attach 与设备识别 | 已接入 | Manifest 注册 `USB_DEVICE_ATTACHED`；filter 匹配 Audio Class，并为已验证的设备提供精确 fallback |
+| USB 权限与能力探测 | 已接入 | `probeExclusiveAccess()` 检查权限、Audio Interface、claim 和 raw descriptors；`getExclusiveCapabilities()` 返回端点摘要 |
+| MethodChannel | 已接入 | 通道提供状态、启动、暂停、恢复、seek、停止、释放、音量、缓冲、诊断和 quirk 导入；反向发布状态、telemetry、插拔和硬件音量事件 |
+| 播放代际隔离 | 已接入 | `playbackId` 用于丢弃旧 worker 和旧会话迟到事件，避免切歌后旧状态覆盖新曲 |
+| 设备拔出交接 | 已接入 | Android 主动使会话失效并保留位置；Dart 区分自然完成、用户停止和异常中断，再决定共享输出恢复 |
+| 共享输出回退 | 已接入 | 权限、端点、采样率、解码、DSD 判定或 native 传输失败时退出未完成会话，由业务层回退共享播放器 |
+| 前后台缓冲目标 | 已接入 | Dart 生命周期选择目标水位，Kotlin 换算最大在途 URB，native 提供实时在途统计 |
+| 后台保活 | 策略已接入 | 前台媒体服务和偏好已接入；最终存活仍受各厂商电池策略影响 |
+| 播放后释放 USB | 已接入 | `stop()` 可短时保留热复用会话，`release()` 强制释放；产品策略可选择停止后何时释放 |
 
-## 参考或占位项
+## 播放格式与传输行为
 
-| 项目 | 状态 | 当前用途 |
+| 能力 | 当前状态 | 说明 |
 | --- | --- | --- |
-| 位深兼容 | UI/偏好占位 | 可保存，用于后续在独占链路里按 DAC 能力回退位深。当前不直接改变 PCM 数据写入。 |
-| 采样率兼容 | UI/偏好占位 | 可保存，用于后续按 DAC 支持列表自动回退采样率。当前主要还是固定采样率和系统 preferred output 在生效。 |
-| 声道兼容 | UI/偏好占位 | 可保存，用于后续处理单声道/多声道回退。当前不做实际声道重排。 |
-| TPDF 抖动 | UI/偏好占位 | 可保存，但当前没有接入高位深转 16-bit 的音频处理链路。 |
-| 延迟建立 USB 输出链路 | UI/偏好占位 | 可保存，用于后续把 claim/open endpoint 推迟到播放开始。当前不改变建链时机。 |
-| USB 总线速度 | UI/偏好占位 | 可保存，用于后续诊断或策略选择。普通 Android App 通常不能强制 USB bus speed。 |
-| DAC 端点格式 | 信息占位 | 无独占播放时显示系统/设备能力；真实 endpoint alt setting 需要底层能力解析后再展示。 |
+| PCM 独占 | 已接入 | 不做 SRC；按源采样率、声道、有效位深、subslot 和 maxPacket 选择安全 alt，无法精确匹配则回退 |
+| PCM 位深模式 | 已接入 | 自动模式优先源一致，其次向上最近，再向下最近；也支持用户选择 16/24/32-bit 输出偏好 |
+| 完整本地 FLAC | 已接入 | libFLAC 保真实位深，避免部分系统解码器把 24-bit 压成 16-bit |
+| 完整本地 WavPack | 已接入 | libwavpack 支持当前 PCM 范围；不支持类型在进入独占前回退 |
+| 系统可解码格式 | 已接入 | WAV/audio-raw 直通；mp3/m4a/aac/ogg/opus 等只有 MediaCodec 预检成功才进入独占 |
+| DoP | 已接入 | DSD rate÷16；需要 24/32-bit alt；marker 为 `0x05/0xFA`，静音 payload 为 `0x69` |
+| Native DSD | 已接入 | RAW_DATA alt 或精确 quirk 指定 `u8/u16le/u32le/u32be`；失败先降 DoP，再回退共享输出 |
+| DSD 不断流 | 已接入 | 编码器会话级复用，暂停/空窗发送 `0x69`，seek/切歌不随意 flush 在途 URB |
+| 同参数热切歌 | 已接入 | 设备、采样率、声道、位深和 DSD 类别兼容时保留接口、alt 和时钟，避免 DAC 重锁 |
+| 跨参数切换 | 已接入 | 预检后用双端静音和预滚保护重配置；旧会话在替换预检完成前保持有效 |
 
-## 传输状态卡说明
+## 音量与 ReplayGain
 
-传输状态卡已经接入独立的真实 telemetry，不再把播放位置或固定 `ISO 0` 当作缓冲状态：
+| 能力 | 当前状态 | 说明 |
+| --- | --- | --- |
+| PCM 数字音量 | 已接入 | C++ packetizer 在源位深域应用 Q16.16 线性增益；DoP/Native DSD 永不进入该路径 |
+| ReplayGain | 已接入 | 音轨/专辑选择、fallback 和 peak headroom 在共享与独占路径统一；native 接收 milli-dB |
+| 标准 UAC 音量 | 已接入 | Feature Unit 探测、GET/RANGE、SET、逐声道 readback 和失败回滚；状态只发布实际读回 |
+| 厂商音量协议 | 已接入精确协议 | 由 `UsbVolumeProtocol` 能力和精确 VID/PID quirk 选择；当前 iBasso 协议不能按厂商 VID 泛化 |
+| DAC 主动音量事件 | 已接入代码 | 区分命令响应、迟到响应和 unsolicited event，去抖后同步业务音量，不回写形成环路；仍需对应设备逐项验收 |
+| 手机物理音量键 | 已接入 | 前台 Activity 和后台 MediaSession 根据实际硬件/数字音量接管；退出独占恢复本地系统音量 |
+| DSD 音量安全门 | 已接入 | 只有协议声明且 quirk 允许的硬件增益可用于 DSD；无可信 readback 时冻结、暂停或拒绝恢复，不修改 DSD 码流 |
+| 音量平滑交接 | 已接入 | PCM 在数字/硬件路径间使用短斜坡；退出硬件模式先建立数字衰减再恢复 DAC unity |
 
-- 主数值：native USB 队列计算出的 `bufferLevelMs`。
-- 状态：结合 active/playing、当前水位、最近欠载时间和目标水位显示待机、暂停、稳定、低水位或欠载；历史欠载不会永久锁住当前状态。
-- 目标：按 App 前后台状态选取对应缓冲偏好，并实时下发 native 引擎。
-- 最低：播放会话中 native 记录的非零最低缓冲水位；没有有效样本时显示 `最低 --`。
-- ISO 统计：底层继续记录 `isoPacketCount`、`pendingUrbs`、`underrunCount` 并写入诊断报告，但页面不再显示对用户无解释价值的 ISO 数字。
+## 云端增长文件与 telemetry
 
-状态卡仍是诊断辅助，不代表端到端声学延迟；实际延迟还包含解码、USB 控制器、DAC FIFO 和模拟输出阶段。
+| 能力 | 当前状态 | 说明 |
+| --- | --- | --- |
+| 云端完整缓存独占 | 已接入 | Navidrome/WebDAV/Emby 等来源缓存为本地完整文件后使用相同独占路径 |
+| 增长文件起播 | 已接入 | 达到目标水位且下载速度可持续时，以 `streaming=true` 打开稳定 `.part` 文件 |
+| 未下载区 seek | 已接入 | `totalBytes` 让 extractor 可定位；当前文件尾不当真实 EOF，约 80ms 重探下载进度 |
+| 弱网回退 | 已接入 | 起播期限内水位不足时回退共享流式输出；独占 worker 不静默等待到无声 |
+| 传输 telemetry | 已接入 | native 返回 pending/total ISO 包、在途 URB 和错误；Kotlin 换算水位、最低值、欠载和目标后发布 Dart |
+| 诊断报告 | 已接入 | 包含设备、描述符、解析、quirk、时钟、音量、会话选择、反馈、URB 和最终状态 |
+
+## 仍需逐设备或系统验证
+
+以下内容不能因为代码和自动测试存在就写成“所有设备已验证”：
+
+1. 每台 DAC 的最高 PCM 采样率、位深和 feedback 格式。
+2. DoP 支持上限与 Native DSD 字节排列。
+3. 标准 Feature Unit 是否真实改变模拟响度，以及 DSD 是否经过同一硬件增益。
+4. 私有 HID/vendor 协议的报文、readback 和外置按钮事件。
+5. 不同手机 USB 控制器、Android 版本和厂商电池策略下的后台稳定性。
+6. 弱网、缓存改名、服务端 Range 行为和长时间增长文件读取。
+7. 拔插、暂停、连续切歌和跨采样率重锁时的实际爆音表现。
+
+完成新设备验收时，应同时保存诊断报告、相关英文 logcat、原始描述符和最小精确 quirk，不得只记录“能出声”。
