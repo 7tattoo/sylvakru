@@ -2,6 +2,8 @@
 
 本分支基于原版 [AfalpHy/sylvakru](https://github.com/AfalpHy/sylvakru/tree/main) 进行二次开发，新增了一整套 **USB 独占直驱播放** 能力：绕开安卓混音器，将音频以位完美（bit-perfect）方式直接推送至外接 USB DAC，并围绕该功能补充了 DSD、云端流式播放、独占音量、状态显示与 DAC 适配诊断等配套能力。
 
+当前实现已将 FLAC/WavPack 解码、DSD 容器与打包、UAC 描述符解析、quirk 匹配、音量协议数值和 PCM 分包计算下沉到 C++17；Kotlin 继续负责 Android USB 会话、线程、控制传输和安全策略。USBDEVFS ISO 传输同样位于 C++，但依赖 Android/Linux，不属于平台无关模块。
+
 ## 致谢
 
 感谢原作者 [AfalpHy](https://github.com/AfalpHy) 创建并开源 sylvakru 项目，本分支的开发建立在原项目基础之上。
@@ -19,7 +21,7 @@
 | USB 独占直驱      | 位完美直推 DAC，采样率跟随音源并校验 DAC 时钟       |
 | 状态胶囊          | 播放页实时显示 采样率 / 位深 / 输出通道，一键进设置 |
 | DSD 播放          | 支持 DoP / Native / 转 PCM 三种输出策略             |
-| 固定采样率 / 位深 | 可锁定输出格式，适配挑剔的 DAC                      |
+| PCM 位深模式      | 按源位深和 DAC 端点能力自动选择，也可指定输出位深   |
 | 云端歌曲流式独占  | 边下边独占直驱，不断流、不爆音                      |
 | 独占音量控制      | 数字音量 + 物理音量键接管 + 悬浮音量条              |
 | 格式扩展          | 独占支持系统可解码的有损格式（m4a/mp3/ogg 等）      |
@@ -31,7 +33,7 @@
 
 开启独占后，App 直接接管 USB DAC，音频以原始采样率、位深位完美送出，不经过安卓系统重采样与混音。输出采样率自动跟随当前曲目，并会校验 DAC 的实际时钟；若 DAC 不支持该采样率或时钟不匹配，会自动回退到系统共享输出，避免出现杂音或无声。
 
-![1783258940951](images/USB_EXCLUSIVE_FEATURES/1783258940951.png)![1783171122033]images/USB_EXCLUSIVE_FEATURES/1783171122033.png)
+![USB 独占播放](images/USB_EXCLUSIVE_FEATURES/1783258940951.png)
 
 ## 2. 状态胶囊与音频输出设置入口
 
@@ -53,20 +55,29 @@
 - **DoP**：以 PCM 帧封装 DSD，设备支持时使用；
 - **Native**：设备声明 RAW_DATA 或 quirk 指定字节排列时直发 DSD，否则自动回退 DoP。
 
-![1783259754777](images/USB_EXCLUSIVE_FEATURES/1783259754777.png)![1783171415754])
+![DSD 输出模式](images/USB_EXCLUSIVE_FEATURES/1783259754777.png)
 
 ## 4. 云端歌曲流式独占
 
 云端歌曲无需等待整曲下载完成即可进入独占直驱：**边下载边独占播放**，并会预取队列中的下一首。做了流式优先与缓存并发保护，切歌 / seek 到未下载区不会误判结束而跳歌，也不会掉出独占产生断流。
 
-![1783260776549](images/USB_EXCLUSIVE_FEATURES/1783260776549.png)!
+![云端流式独占](images/USB_EXCLUSIVE_FEATURES/1783260776549.png)
 
 ## 5. DAC 适配 quirk 与诊断报告
 
 - **quirk 体系**：内置常见 DAC 的适配配置，并支持本地 `override` 导入，针对个别设备做字节排列 / 时钟等微调；
 - **一键诊断报告**：可复制 / 导出当前 DAC 的适配诊断信息（端点、格式描述符、时钟源、quirk 命中情况等），便于排查与反馈。
 
-![1783261036952](images/USB_EXCLUSIVE_FEATURES/1783261036952.png)!
+![DAC 适配与诊断](images/USB_EXCLUSIVE_FEATURES/1783261036952.png)
+
+---
+
+## 开发资料
+
+- [完整接入指南](docs/usb-exclusive-integration-guide.md)：从最新上游主线手工接入完整独占功能，不包含 UI 设计。
+- [接口参考](docs/usb-exclusive-native-api.md)：MethodChannel、Kotlin、JNI 和 C++ API 合同。
+- [DAC 适配指南](docs/dac-adaptation-guide.md)：设备取证、quirk、音量协议和真机排障。
+- [当前接入状态](docs/usb-output-settings-status.md)：当前生产路径、实现边界和验证级别。
 
 ---
 
