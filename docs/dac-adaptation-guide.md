@@ -4,6 +4,8 @@
 - **人**：按第 1–6 节理解链路、读诊断报告、按症状表定位问题；
 - **AI**：直接跳到第 7 节「AI 快速适配协议」，配合用户提供的诊断报告输出 quirk JSON 或代码改动建议。第 1–6 节是协议的知识库，遇到不确定时回来查。
 
+源码移植请先阅读 [USB 独占完整接入指南](usb-exclusive-integration-guide.md)，方法、字段、JNI 数组布局和 C++ API 见 [USB 独占接口参考](usb-exclusive-native-api.md)。本文只负责 DAC 能力取证、quirk 和真机排障，不重复完整接入合同。
+
 适配的核心思路是 **capability-first（能力优先）**：先用描述符、只读探测、厂商应用日志和真机回读证明设备实际使用的能力与协议，再决定是否需要代码和 quirk。VID、PID、`bcdDevice`、厂商名和产品名只用于建立设备指纹，不能替代协议证据。绝大多数已支持差异可通过 quirk JSON（用户在设置页粘贴导入，立即生效、无需发版）解决；只有发现新的协议类别时才加代码。
 
 > **禁止仅凭厂商 VID 泛化硬件音量协议。** 同一厂商、甚至外观相近的产品也可能分别使用 UAC Feature Unit、HID、Bulk 或完全不同的 vendor control。未经逐产品证据验证，不得把单台设备的协议扩成 `vid:*`。
@@ -30,28 +32,40 @@
 ## 1. 链路架构速览
 
 ```
-音频文件
-  ├─ PCM(flac/wav): MediaExtractor/MediaCodec 解码 ──┐
-  └─ DSD(dsf/dff): DsdFileReader（统一输出 MSB-first │
-       逐字节声道交错的 DSD 流）                      │
-         ├─ DoP:    DopPacketizer（2字节/声道/帧 +   │
-         │          0x05/0xFA 标记 → 24-bit PCM 帧）  ├─ PcmIsoPacketizer
-         └─ Native: NativeDsdPacketizer（按 u8/u16le/ │   （水位/反馈节奏，
-                    u32le/u32be 重排 subslot）        │    slot 位深转换）
-                                                      ↓
-                              UsbExclusiveNative(cpp) ISO URB 提交/回收
-                                                      ↓
-                                              USB DAC（claim 接口 + altsetting + UAC 时钟）
+控制面：Kotlin 会话策略 ── claim / altsetting / UAC 时钟 / 硬件音量 ─────┐
+                                                                          │
+数据面：音频文件                                                          │
+  ├─ 完整 FLAC/WavPack ── C++ decoder ────────────────┐                  │
+  ├─ WAV/有损格式 ── Kotlin MediaExtractor/MediaCodec ┤                  │
+  └─ DSD(dsf/dff) ── C++ DsdFileReader                │                  │
+       ├─ C++ DopPacketizer（0x05/0xFA 标记）          ├─ Kotlin PcmIsoPacketizer
+       └─ C++ NativeDsdPacketizer（subslot 重排）      │   ├─ C++ PcmPacketizerCore
+                                                       │   └─ Kotlin 缓冲/反馈/URB 节奏
+                                                       ↓                  │
+                  C++ UsbExclusiveNative（Android/Linux USBDEVFS ISO URB）│
+                                                       └──────────────────┤
+                                                                          ↓
+                                                                      USB DAC
 ```
 
 关键文件（都在 `android/app/src/main/`）：
 | 文件 | 职责 |
 | --- | --- |
-| `kotlin/.../UsbExclusiveAudioEngine.kt` | 会话生命周期、alt 选择（`findOutputTarget`）、UAC1/2 时钟（`configureUsbAudioClock`）、DoP/native 判定（`start`）、写线程 |
-| `kotlin/.../UsbDsd.kt` | DSF/DFF 解析、DoP/native 编码器（纯 Kotlin，JVM 单测覆盖） |
-| `kotlin/.../UsbDacQuirks.kt` | quirk 加载与匹配 |
-| `cpp/usb_exclusive_engine.cpp` | USBDEVFS ISO URB 提交/回收、反馈端点、flushOutput |
+| `kotlin/.../UsbExclusiveAudioEngine.kt` | Android 会话生命周期、alt 选择、UAC1/2 控制传输、DoP/native 判定、解码/写线程、缓冲和硬件音量事务 |
+| `kotlin/.../UsbDsd.kt` | `usb_dsd.cpp` 的 JNI 薄包装；管理 reader/encoder 句柄和会话级生命周期 |
+| `kotlin/.../UsbUac.kt` | UAC 描述符解析 JNI 入口；结构化解码仍由引擎完成 |
+| `kotlin/.../UsbDacQuirks.kt` | quirk JSON/asset/override 装载与字段解析；键匹配调用 C++ |
+| `kotlin/.../UsbVolumeProtocol.kt` | 协议选择、USB 实际读写、会话 generation、健康状态和 DSD 安全门；数值/报文/决策核心调用 C++ |
+| `cpp/usb_dsd.{h,cpp}` | 平台无关 DSF/DFF 解析、DoP 打包与 Native DSD 重排 |
+| `cpp/usb_uac.{h,cpp}` | 平台无关 AS 格式、时钟源、Feature Unit 和输出端子解析 |
+| `cpp/usb_dac_quirks.{h,cpp}` | 平台无关 quirk 键匹配与位完美采样率选择 |
+| `cpp/usb_volume_protocol.{h,cpp}` | 平台无关增益、iBasso 报文、回读验证和 reader 恢复决策 |
+| `cpp/usb_pcm_packetizer.{h,cpp}` | 平台无关槽位/位深转换、PCM 增益、淡入淡出和反馈包长计算 |
+| `cpp/*_jni.cpp` | Kotlin/C++ 类型、扁平数组和句柄边界 |
+| `cpp/usb_exclusive_engine.cpp` | Android/Linux USBDEVFS ISO URB 提交/回收、反馈端点和 flush；不是平台无关模块 |
 | `assets/usb_dac_quirks.json` | 内置 quirk 表（override 文件优先于它） |
+
+下沉后的纯逻辑回归由 `cpp/tests/usb_dsd_test.cpp`、`usb_uac_test.cpp`、`usb_dac_quirks_test.cpp`、`usb_volume_protocol_test.cpp` 和 `usb_pcm_packetizer_test.cpp` 接管。Kotlin/JVM 测试只保留会话切换、状态映射、JSON 解析和仍在 Kotlin 的策略；自动测试通过不能代替 USB DAC 真机验收。
 
 **三条铁律（真机踩坑总结，违反必出问题）**：
 1. **DSD 流（DoP 或 native）一旦中断，DAC 就掉出 DSD 模式再重锁**（指示灯变色 + 继电器咔嗒/电流声）。所以 DoP/native 会话：切歌/seek/停止一律**不 flushOutput**、空窗期由常驻静音线程垫 0x69、编码器提升会话级保持相位连续。
