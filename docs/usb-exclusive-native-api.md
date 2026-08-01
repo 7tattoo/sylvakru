@@ -250,6 +250,8 @@ Java_com_afalphy_sylvakru_<Object>_<method>
 - `String?` 错误返回：`null` 为成功，非空为错误。
 - 读解码器返回帧数；负值表示解码错误，`0 + endOfStream=true` 才映射为 Kotlin EOF `-1`。
 - `ByteBuffer` 必须是 direct buffer，容量至少为 `capacityFrames × channels × 4`。
+- 所有 `*GainQ16` 和反馈包长 Q16 值均为 Q16.16 定点数；`65536` 表示 `1.0`，不得当作百分比或原始 DAC 音量值。
+- 所有 `*MilliDb` 值均以千分之一 dB 为单位；例如 `-6021` 表示 `-6.021 dB`。
 - JNI 数组是扁平 ABI，修改宽度或顺序必须同时修改 C++ 生成端、Kotlin 解析端和测试。
 
 ### 5.1 固定数组布局
