@@ -84,10 +84,10 @@ class CarLyricsManager {
             invokeTwoArg(builder, "putString",
                 String::class.java, CarLyricsConstants.METADATA_KEY_LYRICS_WHOLE,
                 String::class.java, wholeLrc ?: "-1")
-            // putLong(String key, long value)
+            // putLong(String key, long value) — javaPrimitiveType 是可空类型，用 !! 断言非空
             invokeTwoArg(builder, "putLong",
                 String::class.java, CarLyricsConstants.METADATA_KEY_LYRICS_STATUS,
-                Long::class.javaPrimitiveType, status)
+                Long::class.javaPrimitiveType!!, status)
 
             val newMetadata = invokeNoArg(builder, "build")
             // setMetadata(MediaMetadataCompat)
