@@ -6,7 +6,7 @@ import 'package:sylvakru/base/services/lyric.dart';
 /// 状态栏“超级歌词”桥接：按播放位置把当前歌词行推送给外部歌词插件。
 /// 合并了原先的行定位与通道发送两层，去掉多余的中间封装。
 class SuperLyric {
-  static const _channel = MethodChannel('com.afalphy.sylvakru/super_lyric');
+  static const _channel = MethodChannel('com.kugou.android.auto/super_lyric');
   static final bool _isAndroid = Platform.isAndroid;
 
   List<LyricLine> _lines = const [];

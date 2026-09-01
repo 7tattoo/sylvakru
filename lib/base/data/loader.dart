@@ -139,7 +139,7 @@ class Loader {
 
     for (final sourceType in SourceType.values) {
       File tmpPlaylistFile = File(
-        "${getPlaylistConfigPath(sourceType)}/particle_music_playlists.json",
+        "${getPlaylistConfigPath(sourceType)}/kugou_auto_playlists.json",
       );
       if (tmpPlaylistFile.existsSync()) {
         tmpPlaylistFile.rename(

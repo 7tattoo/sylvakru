@@ -1,4 +1,4 @@
-package com.afalphy.sylvakru
+package com.kugou.android.auto
 
 import android.annotation.TargetApi
 import android.app.PendingIntent
@@ -34,9 +34,9 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : AudioServiceActivity() {
     private val tag = "UsbExclusiveAudioEngine"
-    private val channelName = "com.afalphy.sylvakru/usb_audio"
-    private val superLyricChannelName = "com.afalphy.sylvakru/super_lyric"
-    private val usbPermissionAction = "com.afalphy.sylvakru.USB_PERMISSION"
+    private val channelName = "com.kugou.android.auto/usb_audio"
+    private val superLyricChannelName = "com.kugou.android.auto/super_lyric"
+    private val usbPermissionAction = "com.kugou.android.auto.USB_PERMISSION"
     private lateinit var usbAudioChannel: MethodChannel
     private lateinit var usbExclusiveAudioEngine: UsbExclusiveAudioEngine
     private var usbAudioDeviceCallback: AudioDeviceCallback? = null
@@ -44,6 +44,7 @@ class MainActivity : AudioServiceActivity() {
     private var pendingExclusiveProbeDevice: UsbDevice? = null
     private var usbPermissionReceiver: BroadcastReceiver? = null
     private var lastExclusiveProbeResult: Map<String, Any?>? = null
+    private val carLyricsManager = CarLyricsManager()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -543,6 +544,9 @@ class MainActivity : AudioServiceActivity() {
         val endTime = call.argument<Number>("endTime")?.toLong() ?: startTime
         val words = parseSuperLyricWords(call.argument<List<Any?>>("tokens"))
 
+        // vivo 车联 Channel A+B 双通道注入（独立于 SuperLyricApi 状态栏通道）
+        carLyricsManager.updateLyricLine(lyric, null)
+
         return runSuperLyricAction("sendLyric") {
             SuperLyricHelper.sendLyric(
                 SuperLyricData().setLyric(
@@ -573,6 +577,9 @@ class MainActivity : AudioServiceActivity() {
     }
 
     private fun sendSuperLyricStop(): Boolean {
+        // vivo 车联：清除歌词元数据
+        carLyricsManager.clear()
+
         return runSuperLyricAction("sendStop") {
             SuperLyricHelper.sendStop(SuperLyricData())
         }

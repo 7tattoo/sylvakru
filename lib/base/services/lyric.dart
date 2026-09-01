@@ -99,7 +99,7 @@ Future<void> setParsedLyrics(MyAudioMetadata song) async {
 
       late File lrcFile;
       if (song.sourceType == .webdav) {
-        lrcFile = File('${tmpDir.path}/particle_music_lyric');
+        lrcFile = File('${tmpDir.path}/kugou_auto_lyric');
         await webdavClient?.download(remotePath: path, localPath: lrcFile.path);
       } else {
         lrcFile = File(path);

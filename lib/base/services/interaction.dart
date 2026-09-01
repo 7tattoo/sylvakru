@@ -515,7 +515,7 @@ class MenuPositionDelegate extends SingleChildLayoutDelegate {
 }
 
 class NativeMenu {
-  static const _channel = MethodChannel('com.afalphy.menu');
+  static const _channel = MethodChannel('com.kugou.android.auto.menu');
 
   static final Map<IconData, Uint8List> _iconMap = {};
 

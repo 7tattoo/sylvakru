@@ -49,7 +49,7 @@ Future<void> initAudioService() async {
     builder: () => MyAudioHandler(),
 
     config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.afalphy.sylvakru',
+      androidNotificationChannelId: 'com.kugou.android.auto',
       androidNotificationChannelName: 'Sylvakru',
       androidNotificationOngoing: true,
     ),

@@ -5,7 +5,7 @@ import 'package:sylvakru/base/app.dart';
 import 'package:sylvakru/base/services/logger.dart';
 
 class BookmarkService {
-  static const _channel = MethodChannel('com.afalphy.bookmark_manager');
+  static const _channel = MethodChannel('com.kugou.android.auto.bookmark_manager');
   static const _fileName = 'directory_inventory.txt';
 
   static late File file;

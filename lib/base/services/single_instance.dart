@@ -45,7 +45,7 @@ class SingleInstance {
             InternetAddress.loopbackIPv4,
             existingPort,
           );
-          socket.write('particle_music_show_window');
+          socket.write('kugou_auto_show_window');
           await socket.flush();
           await socket.close();
           logger.output('Successfully contacted the main instance');
@@ -66,7 +66,7 @@ class SingleInstance {
     // Handle incoming messages
     server.listen((client) async {
       final msg = await utf8.decodeStream(client);
-      if (msg.contains('particle_music_show_window')) {
+      if (msg.contains('kugou_auto_show_window')) {
         await windowManager.show();
         await windowManager.focus();
       }

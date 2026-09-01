@@ -460,7 +460,7 @@ std::string submitFeedbackLocked() {
 }  // namespace
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_open(
+Java_com_kugou_android_auto_UsbExclusiveNative_open(
     JNIEnv* env,
     jobject,
     jint fd,
@@ -547,7 +547,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_open(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_writePcm(
+Java_com_kugou_android_auto_UsbExclusiveNative_writePcm(
     JNIEnv* env,
     jobject,
     jbyteArray bytes,
@@ -592,7 +592,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_writePcm(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_writeIsoPackets(
+Java_com_kugou_android_auto_UsbExclusiveNative_writeIsoPackets(
     JNIEnv* env,
     jobject,
     jbyteArray bytes,
@@ -650,13 +650,13 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_writeIsoPackets(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_feedbackFramesPerPacketQ16(JNIEnv*, jobject) {
+Java_com_kugou_android_auto_UsbExclusiveNative_feedbackFramesPerPacketQ16(JNIEnv*, jobject) {
     std::lock_guard<std::mutex> lock(g_mutex);
     return g_feedback_frames_per_packet_q16;
 }
 
 extern "C" JNIEXPORT jlongArray JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_transportTelemetry(JNIEnv* env, jobject) {
+Java_com_kugou_android_auto_UsbExclusiveNative_transportTelemetry(JNIEnv* env, jobject) {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (g_fd >= 0) {
         reapCompletedLocked();
@@ -685,7 +685,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_transportTelemetry(JNIEnv* env, job
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_setIsoPacketSize(
+Java_com_kugou_android_auto_UsbExclusiveNative_setIsoPacketSize(
     JNIEnv*,
     jobject,
     jint packet_size) {
@@ -699,7 +699,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_setIsoPacketSize(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_setMaxPendingOutputUrbs(
+Java_com_kugou_android_auto_UsbExclusiveNative_setMaxPendingOutputUrbs(
     JNIEnv*,
     jobject,
     jint max_pending_urbs) {
@@ -715,7 +715,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_setMaxPendingOutputUrbs(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_flushOutput(JNIEnv* env, jobject) {
+Java_com_kugou_android_auto_UsbExclusiveNative_flushOutput(JNIEnv* env, jobject) {
     std::lock_guard<std::mutex> lock(g_mutex);
     const std::string error = flushOutputLocked();
     if (error.empty()) {
@@ -725,7 +725,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_flushOutput(JNIEnv* env, jobject) {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_close(JNIEnv*, jobject) {
+Java_com_kugou_android_auto_UsbExclusiveNative_close(JNIEnv*, jobject) {
     std::lock_guard<std::mutex> lock(g_mutex);
     closeLocked();
 }

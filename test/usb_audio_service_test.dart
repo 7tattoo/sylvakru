@@ -5,7 +5,7 @@ import 'package:sylvakru/base/services/usb_audio_service.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const channel = MethodChannel('com.afalphy.sylvakru/usb_audio');
+  const channel = MethodChannel('com.kugou.android.auto/usb_audio');
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 

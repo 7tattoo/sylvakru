@@ -44,7 +44,7 @@ class IAPService {
     onMessage?.call(l10n.connectingToAppStore);
     if (products.isEmpty) {
       final ProductDetailsResponse response = await _iap.queryProductDetails({
-        'com.afalphy.sylvakru.premium.lifetime',
+        'com.kugou.android.auto.premium.lifetime',
       });
       if (response.error != null) {
         logger.output(response.error.toString());

@@ -1,4 +1,4 @@
-package com.afalphy.sylvakru
+package com.kugou.android.auto
 
 import java.io.ByteArrayOutputStream
 import java.io.File
