@@ -1,8 +1,9 @@
 package com.kugou.android.auto
 
 import android.os.Bundle
-import android.support.v4.media.MediaMetadataCompat
-import android.support.v4.media.session.MediaSessionCompat
+import androidx.media.MediaMetadataCompat
+import androidx.media.session.MediaControllerCompat
+import androidx.media.session.MediaSessionCompat
 import android.util.Log
 
 /**

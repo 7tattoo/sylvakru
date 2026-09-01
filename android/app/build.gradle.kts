@@ -95,6 +95,7 @@ flutter {
 
 dependencies {
     implementation("com.github.HChenX:SuperLyricApi:3.4")
+    implementation("androidx.media:media:1.7.0")
     testImplementation("junit:junit:4.13.2")
     // JVM 单测里没有 Android 运行时自带的 org.json
     testImplementation("org.json:json:20240303")
