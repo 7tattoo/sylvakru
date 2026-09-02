@@ -296,7 +296,7 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
                 toHeroContext,
               ) => FittedBox(child: toHeroContext.widget),
           child: CoverArtWidget(
-            size: mobileWidth * 0.84,
+            size: mobileWidth * 0.62,
             borderRadius: mobileWidth * 0.04,
             song: currentSong,
             elevation: 15,
@@ -521,7 +521,7 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
           },
         ),
 
-        SizedBox(height: 40),
+        SizedBox(height: 40 + MediaQuery.of(context).padding.bottom),
       ],
     );
   }

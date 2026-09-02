@@ -44,7 +44,7 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
     if (mode == SystemUiMode.manual) {
       SystemChrome.setEnabledSystemUIMode(
         SystemUiMode.manual,
-        overlays: [SystemUiOverlay.top],
+        overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
       );
     } else {
       SystemChrome.setEnabledSystemUIMode(mode);
@@ -173,15 +173,16 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
           return MiniView();
         }
         if (viewMode == .bigPicture) {
-          _applySystemUiMode(SystemUiMode.edgeToEdge);
+          _applySystemUiMode(SystemUiMode.manual);
           return BigPictureView();
         }
         if (isTooNarrow(context)) {
           _applySystemUiMode(SystemUiMode.manual);
           return PortraitView();
         }
-        // edgeToEdge：系统栏（含车机 dock）可见，insets 生效，布局可避让
-        _applySystemUiMode(SystemUiMode.edgeToEdge);
+        // manual + top/bottom overlays：系统栏（含车机 dock）完全显示可见，
+        // 非沉浸，insets 生效，布局可避让，可正常返回车载主页
+        _applySystemUiMode(SystemUiMode.manual);
         return LandscapeView();
       },
     );
