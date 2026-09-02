@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sylvakru/base/app.dart';
+import 'package:sylvakru/base/data/setting.dart';
 import 'package:sylvakru/base/audio_handler.dart';
 import 'package:sylvakru/base/services/color_manager.dart';
 import 'package:sylvakru/base/asset_images.dart';
@@ -95,7 +96,29 @@ class SelectableSongListPageState extends State<SelectableSongListPage> {
         allSelected.value = false;
       }
     });
+    // Persist library sort type so it survives app restart
+    if (isLibrary) {
+      if (sortTypeNotifier.value == 0 && defaultSortTypeNotifier.value != 0) {
+        sortTypeNotifier.value = defaultSortTypeNotifier.value;
+      }
+      sortTypeNotifier.addListener(_persistSortType);
+    }
     updateSongList();
+  }
+
+  void _persistSortType() {
+    if (isLibrary) {
+      defaultSortTypeNotifier.value = sortTypeNotifier.value;
+      setting.save();
+    }
+  }
+
+  @override
+  void dispose() {
+    if (isLibrary) {
+      sortTypeNotifier.removeListener(_persistSortType);
+    }
+    super.dispose();
   }
 
   Widget moreButton(BuildContext context) {
