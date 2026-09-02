@@ -35,10 +35,6 @@ class SongListManager {
 
     sourceTypeNotifier.addListener(_notify);
 
-    // Restore current source's sort type across app restarts (data layer, so
-    // it survives regardless of which UI builds the list).
-    getSortTypeNotifier().value = defaultSortTypeNotifier.value;
-
     // Persist current source's sort type whenever it changes.
     for (final n in [
       localSortTypeNotifier,
@@ -53,6 +49,19 @@ class SongListManager {
           setting.save();
         }
       });
+    }
+  }
+
+  /// setting.load() 之后调用：此时 defaultSortTypeNotifier 才有磁盘值。
+  /// 构造函数里做恢复没用——SongListManager 随 library 在 import 期就创建，
+  /// 早于 setting.load()，那时读到的还是默认 0。
+  void restoreSortType() {
+    final saved = defaultSortTypeNotifier.value;
+    if (saved == 0) {
+      return;
+    }
+    for (final t in SourceType.values) {
+      getSortTypeNotifier2(t).value = saved;
     }
   }
 

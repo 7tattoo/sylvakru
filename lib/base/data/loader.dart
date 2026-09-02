@@ -40,6 +40,11 @@ class Loader {
     await config.load();
     await setting.load();
 
+    // setting.load() 之后才有磁盘上的排序值，此时恢复各来源的排序类型
+    library.songListManager.restoreSortType();
+    history.rankingSongListManager.restoreSortType();
+    history.recentlySongListManager.restoreSortType();
+
     colorManager.updateColors();
 
     await library.loadFonts();

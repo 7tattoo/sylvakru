@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:sylvakru/base/services/color_manager.dart';
 import 'package:sylvakru/landscape_view/sidebar.dart';
 import 'package:sylvakru/layer/layers_manager.dart';
+import 'package:sylvakru/base/utils/media_query.dart';
 import 'package:sylvakru/portrait_view/play_bar.dart';
 
 final GlobalKey<ScaffoldState> portraitKey = GlobalKey();
@@ -121,7 +122,12 @@ class _PortraitViewState extends State<PortraitView>
             },
           ),
 
-          Positioned(left: 20, right: 20, bottom: 40, child: PlayBar()),
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 40 + getBottomReserve(context),
+            child: PlayBar(),
+          ),
         ],
       ),
     );

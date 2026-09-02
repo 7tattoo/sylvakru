@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:async';
 import 'dart:io';
 
@@ -283,6 +284,12 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
   Widget artPage(BuildContext context, MyAudioMetadata? currentSong) {
     final l10n = AppLocalizations.of(context);
     final mobileWidth = MediaQuery.widthOf(context);
+    final mobileHeight = MediaQuery.heightOf(context);
+    // 车机投屏时窗口很"矮"，封面必须按可用高度收敛，否则挤掉底部控件
+    final coverSize = min(
+      mobileWidth * 0.62,
+      (mobileHeight - getBottomReserve(context)) * 0.42,
+    );
 
     return Column(
       children: [
@@ -297,8 +304,8 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
                 toHeroContext,
               ) => FittedBox(child: toHeroContext.widget),
           child: CoverArtWidget(
-            size: mobileWidth * 0.62,
-            borderRadius: mobileWidth * 0.04,
+            size: coverSize,
+            borderRadius: coverSize * 0.05,
             song: currentSong,
             elevation: 15,
             color: colorManager.getSpecificLyricsPageCoverArtBaseColor(),
