@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sylvakru/base/app.dart';
+import 'package:sylvakru/base/data/setting.dart';
 import 'package:sylvakru/base/my_audio_metadata.dart';
 
 class SongListManager {
@@ -33,6 +34,26 @@ class SongListManager {
     embyChangeNotifier.addListener(_notify);
 
     sourceTypeNotifier.addListener(_notify);
+
+    // Restore current source's sort type across app restarts (data layer, so
+    // it survives regardless of which UI builds the list).
+    getSortTypeNotifier().value = defaultSortTypeNotifier.value;
+
+    // Persist current source's sort type whenever it changes.
+    for (final n in [
+      localSortTypeNotifier,
+      webdavSortTypeNotifier,
+      subsonicSortTypeNotifier,
+      navidromeSortTypeNotifier,
+      embySortTypeNotifier,
+    ]) {
+      n.addListener(() {
+        if (identical(n, getSortTypeNotifier())) {
+          defaultSortTypeNotifier.value = n.value;
+          setting.save();
+        }
+      });
+    }
   }
 
   String get sourceTypeName => sourceTypeNotifier.value.name;
