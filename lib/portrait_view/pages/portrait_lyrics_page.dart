@@ -284,13 +284,35 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
   Widget artPage(BuildContext context, MyAudioMetadata? currentSong) {
     final l10n = AppLocalizations.of(context);
     final mobileWidth = MediaQuery.widthOf(context);
-    final mobileHeight = MediaQuery.heightOf(context);
-    // 车机投屏时窗口很"矮"，封面必须按可用高度收敛，否则挤掉底部控件
-    final coverSize = min(
-      mobileWidth * 0.62,
-      (mobileHeight - getBottomReserve(context)) * 0.32,
-    );
 
+    // 自适应封面：按容器实际可用高度反推，先给底部控件区和歌词区留出下限，
+    // 剩下的才给封面。这样任意分辨率/车机窗口都不会把控件挤出屏幕。
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 底部固定区实测高度：输出胶囊(约 46) + 功能按钮行(约 48) +
+        // 进度条(60) + 播放控件行(约 56) + 间距(30 + 12) + dock 预留
+        final bottomBlock =
+            (isCarProjection(context) ? 234.0 : 252.0) +
+            getBottomReserve(context);
+        // 歌词区至少留这么高，否则封面会把歌词压没
+        final minLyrics = isCarProjection(context) ? 56.0 : 120.0;
+        final available = constraints.maxHeight - bottomBlock - minLyrics;
+        final coverSize = max(
+          80.0,
+          min(mobileWidth * 0.62, available),
+        );
+
+        return artPageContent(context, currentSong, l10n, coverSize);
+      },
+    );
+  }
+
+  Widget artPageContent(
+    BuildContext context,
+    MyAudioMetadata? currentSong,
+    AppLocalizations l10n,
+    double coverSize,
+  ) {
     return Column(
       children: [
         Hero(
@@ -312,7 +334,7 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
           ),
         ),
 
-        const SizedBox(height: 30),
+        SizedBox(height: isCarProjection(context) ? 12 : 30),
 
         Expanded(
           child: Padding(
