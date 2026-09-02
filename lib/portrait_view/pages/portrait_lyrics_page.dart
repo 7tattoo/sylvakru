@@ -313,6 +313,10 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
     AppLocalizations l10n,
     double coverSize,
   ) {
+    // 车机投屏：左封面 + 右侧信息/控件的横向布局（窗口很矮，纵向堆叠放不下）
+    if (isCarProjection(context)) {
+      return carProjectionArtPage(context, currentSong, l10n, coverSize);
+    }
     return Column(
       children: [
         Hero(
@@ -553,6 +557,120 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
 
         SizedBox(height: 40 + getBottomReserve(context)),
       ],
+    );
+  }
+
+  /// 车机投屏播放页：左侧封面 + 右侧标题/控件的横向布局。
+  /// 车机窗口宽而矮（如 880x768 可视区更矮），纵向堆叠会把控件挤出屏幕。
+  Widget carProjectionArtPage(
+    BuildContext context,
+    MyAudioMetadata? currentSong,
+    AppLocalizations l10n,
+    double coverSize,
+  ) {
+    final width = MediaQuery.widthOf(context);
+    final height = MediaQuery.heightOf(context) - getBottomReserve(context);
+    final cover = min(width * 0.3, height * 0.62);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 12, 24, getBottomReserve(context) + 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Hero(
+            tag: 'cover',
+            flightShuttleBuilder:
+                (
+                  flightContext,
+                  animation,
+                  flightDirection,
+                  fromHeroContext,
+                  toHeroContext,
+                ) => FittedBox(child: toHeroContext.widget),
+            child: CoverArtWidget(
+              size: cover,
+              borderRadius: cover * 0.06,
+              song: currentSong,
+              elevation: 15,
+              color: colorManager.getSpecificLyricsPageCoverArtBaseColor(),
+            ),
+          ),
+
+          SizedBox(width: 28),
+
+          Expanded(
+            child: ValueListenableBuilder(
+              valueListenable: lyricsPageForegroundColor.valueNotifier,
+              builder: (context, fg, child) {
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      getTitle(currentSong),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: fg,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      getArtist(currentSong),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 15, color: fg.withAlpha(200)),
+                    ),
+
+                    SizedBox(height: 14),
+
+                    // 收藏 / 定时 / 播放列表
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        FavoriteButton(size: 26),
+                        IconButton(
+                          color: fg,
+                          onPressed: () {
+                            displayTimedPauseSetting(context);
+                          },
+                          icon: ImageIcon(timerImage, size: 24),
+                        ),
+                        showPlayQueueButton(26, iconColor: fg),
+                      ],
+                    ),
+
+                    SeekBar(color: fg, widgetHeight: 44, seekBarHeight: 28),
+
+                    // 播放控件
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        playModeButton(26, iconColor: fg),
+                        skip2PreviousButton(30, iconColor: fg),
+                        playOrPauseButton(44, iconColor: fg),
+                        skip2NextButton(30, iconColor: fg),
+                        IconButton(
+                          color: fg,
+                          onPressed: () {
+                            lyricsFontSizeOffsetNotifier.value += 2;
+                            setting.save();
+                          },
+                          icon: Icon(Icons.text_increase_rounded, size: 24),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 

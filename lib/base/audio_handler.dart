@@ -253,6 +253,9 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       if (!isPlayingNotifier.value) {
         return;
       }
+      // 车载歌词也由播放器位置流驱动：应用退到后台后 Dart 定时器会被系统
+      // 节流甚至暂停，只靠 Timer 会让车机歌词卡在最后一次推送的位置。
+      _pushCarLyrics();
     });
 
     usbExclusivePlaybackStateNotifier.addListener(_handleUsbExclusiveState);
@@ -310,7 +313,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       _pushCarLyrics();
     });
   }
-
   void _stopCarLyricTicker() {
     _carLyricTicker?.cancel();
     _carLyricTicker = null;
@@ -321,7 +323,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
 
   void _pushCarLyrics() {
     if (!carLyricsEnabledNotifier.value || currentSongNotifier.value == null) {
-      _stopCarLyricTicker();
       return;
     }
     final song = currentSongNotifier.value!;
@@ -371,6 +372,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       if (currentMedia != null) {
         mediaItem.add(currentMedia.copyWith(extras: extras));
       }
+      // 车机的播放状态卡片依赖 playbackState 的位置/状态，后台时也要同步刷新
+      updatePlaybackState(postion: pos);
     }
   }
 
@@ -571,6 +574,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       }
       // 独占播放时，位置由独占链路上报，驱动进度流。
       _positionController.add(state.position);
+      // 独占链路也要驱动车载歌词，否则后台时车机歌词不滚动。
+      _pushCarLyrics();
       if (isPlayingNotifier.value != state.playing) {
         updateIsPlaying(state.playing);
       }

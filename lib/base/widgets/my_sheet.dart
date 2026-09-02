@@ -22,11 +22,14 @@ class MySheet extends StatelessWidget {
         final bottomReserve = getBottomReserve(context);
         final pageHeight = MediaQuery.heightOf(context);
         final maxSheetHeight = pageHeight - bottomReserve - 24;
-        // 车机窗口很矮：默认高度按可视区（扣掉 dock）比例算，避免占满整屏
+        // 车机窗口很矮：默认高度按内容自适应（wrap），不再占据固定比例
         final defaultHeight = isCarProjection(context)
-            ? (pageHeight - bottomReserve) * 0.62
+            ? null
             : min(500.0, pageHeight * 0.6);
-        final sheetHeight = min(height ?? defaultHeight, maxSheetHeight);
+        final resolved = height ?? defaultHeight;
+        final sheetHeight = resolved == null
+            ? null
+            : min(resolved, maxSheetHeight);
 
         return Material(
           shape: SmoothRectangleBorder(
@@ -40,15 +43,22 @@ class MySheet extends StatelessWidget {
           clipBehavior: .antiAlias,
           child: Padding(
             padding: EdgeInsets.only(bottom: bottomReserve),
-            child: SizedBox(
-              height: sheetHeight,
-              child: MediaQuery.removePadding(
-                context: context,
-                removeLeft: true, // for mobile
-                removeRight: true,
-                removeBottom: true,
-                removeTop: true,
-                child: child,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: maxSheetHeight,
+                // 高度为 null 时按内容自适应（车机），否则固定高度
+                minHeight: sheetHeight ?? 0,
+              ),
+              child: SizedBox(
+                height: sheetHeight,
+                child: MediaQuery.removePadding(
+                  context: context,
+                  removeLeft: true, // for mobile
+                  removeRight: true,
+                  removeBottom: true,
+                  removeTop: true,
+                  child: child,
+                ),
               ),
             ),
           ),

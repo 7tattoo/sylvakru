@@ -67,6 +67,7 @@ extension _SongListPage on _SongListState {
 
     return MySheet(
       Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
             title: SizedBox(
