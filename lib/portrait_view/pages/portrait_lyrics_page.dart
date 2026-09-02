@@ -18,6 +18,7 @@ import 'package:sylvakru/base/widgets/playlist_widgets.dart';
 import 'package:sylvakru/base/data/setting.dart';
 import 'package:sylvakru/portrait_view/sleep_timer.dart';
 import 'package:sylvakru/base/widgets/my_sheet.dart';
+import 'package:sylvakru/base/utils/media_query.dart';
 import 'package:sylvakru/l10n/generated/app_localizations.dart';
 import 'package:sylvakru/base/widgets/lyric_list_view.dart';
 import 'package:sylvakru/base/my_audio_metadata.dart';
@@ -521,7 +522,7 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
           },
         ),
 
-        SizedBox(height: 40 + MediaQuery.of(context).padding.bottom),
+        SizedBox(height: 40 + getBottomReserve(context)),
       ],
     );
   }

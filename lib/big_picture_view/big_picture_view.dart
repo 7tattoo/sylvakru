@@ -418,8 +418,7 @@ class _BigPictureViewState extends State<BigPictureView> {
   }
 
   Widget bottomBar(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).padding.bottom +
-        MediaQuery.of(context).viewInsets.bottom;
+    final bottomInset = getBottomReserve(context);
     return Positioned(
       bottom: 20 + bottomInset,
       left: 0,

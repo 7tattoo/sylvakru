@@ -18,6 +18,7 @@ import 'package:sylvakru/landscape_view/volume_bar.dart';
 import 'package:sylvakru/base/widgets/lyric_list_view.dart';
 import 'package:sylvakru/base/widgets/seekbar.dart';
 import 'package:sylvakru/base/my_audio_metadata.dart';
+import 'package:sylvakru/base/utils/media_query.dart';
 import 'package:sylvakru/base/utils/metadata_utils.dart';
 import 'package:text_scroll/text_scroll.dart';
 
@@ -73,12 +74,11 @@ class _LandscapeLyricsPageState extends State<LandscapeLyricsPage> {
       builder: (context, currentSong, child) {
         final pageWidth = MediaQuery.widthOf(context);
         final pageHight = MediaQuery.heightOf(context);
-        final bottomInset = MediaQuery.of(context).padding.bottom +
-            MediaQuery.of(context).viewInsets.bottom;
+        final bottomInset = getBottomReserve(context);
         // 封面适当缩小，为封面下方的输出状态胶囊腾出位置；车联横屏不铺满
         final coverArtSize = min(
           pageWidth * (isMobile ? 0.32 : 0.25),
-          pageHight * (isMobile ? 0.6 : 0.45),
+          (pageHight - bottomInset) * (isMobile ? 0.6 : 0.42),
         );
 
         return Material(

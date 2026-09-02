@@ -36,8 +36,7 @@ class _BigHomePanelState extends State<BigHomePanel> {
       controller: verticalController,
       padding: EdgeInsets.only(
         top: 75 + getTopOffset(context),
-        bottom: 20 + MediaQuery.of(context).padding.bottom +
-            MediaQuery.of(context).viewInsets.bottom,
+        bottom: 20 + getBottomReserve(context),
         left: 40,
         right: 40,
       ),
