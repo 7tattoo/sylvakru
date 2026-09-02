@@ -293,15 +293,18 @@ Future<T?> showAnimationDialog<T>({
               ),
 
               Center(
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeOutCubic,
-                  transform: Matrix4.translationValues(0, offset.dy, 0),
-                  child: GestureDetector(
-                    onVerticalDragUpdate: (details) {
-                      if (!isKeyboardOpen) return;
+                child: Padding(
+                  // 车机 dock 覆盖窗口底部：整体上移，弹窗在可视区内居中
+                  padding: EdgeInsets.only(bottom: getBottomReserve(context)),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    transform: Matrix4.translationValues(0, offset.dy, 0),
+                    child: GestureDetector(
+                      onVerticalDragUpdate: (details) {
+                        if (!isKeyboardOpen) return;
 
-                      setState(() {
+                        setState(() {
                         if (offset.dy < getMinOffset() || offset.dy > 0) {
                           offset += Offset(0, details.delta.dy * 0.15);
                         } else {
@@ -367,6 +370,7 @@ Future<T?> showAnimationDialog<T>({
                           },
                         ),
                       ),
+                    ),
                     ),
                   ),
                 ),
@@ -756,7 +760,7 @@ void showSongOptions({
             maxHeight:
                 (MediaQuery.sizeOf(context).height -
                         getBottomReserve(context)) *
-                    0.8,
+                    (isCarProjection(context) ? 0.72 : 0.8),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

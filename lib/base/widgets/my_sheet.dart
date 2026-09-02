@@ -22,10 +22,11 @@ class MySheet extends StatelessWidget {
         final bottomReserve = getBottomReserve(context);
         final pageHeight = MediaQuery.heightOf(context);
         final maxSheetHeight = pageHeight - bottomReserve - 24;
-        final sheetHeight = min(
-          height ?? min(500.0, pageHeight * 0.6),
-          maxSheetHeight,
-        );
+        // 车机窗口很矮：默认高度按可视区（扣掉 dock）比例算，避免占满整屏
+        final defaultHeight = isCarProjection(context)
+            ? (pageHeight - bottomReserve) * 0.62
+            : min(500.0, pageHeight * 0.6);
+        final sheetHeight = min(height ?? defaultHeight, maxSheetHeight);
 
         return Material(
           shape: SmoothRectangleBorder(
