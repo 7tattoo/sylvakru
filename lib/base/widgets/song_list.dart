@@ -284,6 +284,21 @@ class _SongListState extends State<SongList> {
     updateSongList();
     sortTypeNotifier.addListener(updateSongList);
     textController.addListener(updateSongList);
+
+    // Persist the library sort type so it survives app restart
+    if (isLibrary) {
+      if (sortTypeNotifier.value == 0 && defaultSortTypeNotifier.value != 0) {
+        sortTypeNotifier.value = defaultSortTypeNotifier.value;
+      }
+      sortTypeNotifier.addListener(_persistSortType);
+    }
+  }
+
+  void _persistSortType() {
+    if (isLibrary) {
+      defaultSortTypeNotifier.value = sortTypeNotifier.value;
+      setting.save();
+    }
   }
 
   // 收起/展开专辑段
@@ -355,6 +370,9 @@ class _SongListState extends State<SongList> {
     }
 
     sortTypeNotifier.removeListener(updateSongList);
+    if (isLibrary) {
+      sortTypeNotifier.removeListener(_persistSortType);
+    }
     textController.removeListener(updateSongList);
     scrollController.dispose();
     timer?.cancel();
