@@ -14,8 +14,6 @@ import 'package:sylvakru/base/app.dart';
 import 'package:sylvakru/base/utils/path.dart';
 import 'package:sylvakru/base/widgets/manage_music_folders.dart';
 
-final exitOnCloseNotifier = ValueNotifier(false);
-
 final setting = Setting();
 
 class Setting {
