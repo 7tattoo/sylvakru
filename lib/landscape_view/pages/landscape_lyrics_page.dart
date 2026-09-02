@@ -45,22 +45,25 @@ class _LandscapeLyricsPageState extends State<LandscapeLyricsPage> {
     immersiveModeTimer = Timer(const Duration(milliseconds: 5000), () {
       immersiveModeNotifier.value = true;
     });
-    return ValueListenableBuilder(
-      valueListenable: immersiveModeNotifier,
-      builder: (context, value, child) {
-        return MouseRegion(
-          cursor: value ? SystemMouseCursors.none : MouseCursor.defer,
-          onHover: (event) {
-            immersiveModeNotifier.value = false;
-            immersiveModeTimer?.cancel();
-            immersiveModeTimer = Timer(const Duration(milliseconds: 5000), () {
-              immersiveModeNotifier.value = true;
-            });
-          },
-          child: child,
-        );
-      },
-      child: content(),
+    return SafeArea(
+      bottom: true,
+      child: ValueListenableBuilder(
+        valueListenable: immersiveModeNotifier,
+        builder: (context, value, child) {
+          return MouseRegion(
+            cursor: value ? SystemMouseCursors.none : MouseCursor.defer,
+            onHover: (event) {
+              immersiveModeNotifier.value = false;
+              immersiveModeTimer?.cancel();
+              immersiveModeTimer = Timer(const Duration(milliseconds: 5000), () {
+                immersiveModeNotifier.value = true;
+              });
+            },
+            child: child,
+          );
+        },
+        child: content(),
+      ),
     );
   }
 
