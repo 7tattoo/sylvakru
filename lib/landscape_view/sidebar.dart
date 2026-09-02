@@ -404,7 +404,8 @@ class Sidebar extends StatelessWidget {
                   layersManager.switchRootLayer('settings');
                 },
               ),
-              SizedBox(height: 40),
+              // 车机 dock 盖在窗口之上，底部需预留，否则「设置」被截断
+              SizedBox(height: 40 + getBottomReserve(context)),
             ],
           ],
         ),

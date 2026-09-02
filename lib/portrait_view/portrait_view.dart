@@ -158,6 +158,8 @@ class _PortraitViewState extends State<PortraitView>
                   },
                 ),
               ),
+              // 车机 dock 覆盖在应用窗口之上，抽屉底部需预留避让
+              SizedBox(height: getBottomReserve(context)),
             ],
           ),
         );

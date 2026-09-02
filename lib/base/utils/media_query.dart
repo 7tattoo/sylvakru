@@ -24,7 +24,7 @@ double getBottomReserve(BuildContext context) {
     return systemInset;
   }
   if (isCarProjection(context)) {
-    return mq.size.height * 0.12;
+    return mq.size.height * 0.16;
   }
   return 0;
 }

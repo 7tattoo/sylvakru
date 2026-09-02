@@ -288,7 +288,7 @@ class _PortraitLyricsPageState extends State<PortraitLyricsPage> {
     // 车机投屏时窗口很"矮"，封面必须按可用高度收敛，否则挤掉底部控件
     final coverSize = min(
       mobileWidth * 0.62,
-      (mobileHeight - getBottomReserve(context)) * 0.42,
+      (mobileHeight - getBottomReserve(context)) * 0.32,
     );
 
     return Column(
