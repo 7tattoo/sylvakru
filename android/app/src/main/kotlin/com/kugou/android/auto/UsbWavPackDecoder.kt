@@ -1,4 +1,4 @@
-package com.afalphy.sylvakru
+package com.kugou.android.auto
 
 import java.io.IOException
 import java.nio.ByteBuffer

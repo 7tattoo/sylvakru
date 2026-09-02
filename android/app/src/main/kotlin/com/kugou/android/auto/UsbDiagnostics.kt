@@ -1,4 +1,4 @@
-package com.afalphy.sylvakru
+package com.kugou.android.auto
 
 import android.util.Log
 import java.text.SimpleDateFormat

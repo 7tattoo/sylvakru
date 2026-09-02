@@ -56,12 +56,12 @@ jbyteArray toByteArray(JNIEnv* env, const std::vector<uint8_t>& bytes) {
 }  // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_readerCreate(JNIEnv*, jobject) {
+Java_com_kugou_android_auto_UsbDsdNative_readerCreate(JNIEnv*, jobject) {
     return reinterpret_cast<jlong>(new DsdReaderHandle());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_readerOpen(
+Java_com_kugou_android_auto_UsbDsdNative_readerOpen(
     JNIEnv* env,
     jobject,
     jlong handle,
@@ -81,7 +81,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_readerOpen(
 }
 
 extern "C" JNIEXPORT jlongArray JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_readerInfo(
+Java_com_kugou_android_auto_UsbDsdNative_readerInfo(
     JNIEnv* env,
     jobject,
     jlong handle) {
@@ -100,7 +100,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_readerInfo(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_readerFormatName(
+Java_com_kugou_android_auto_UsbDsdNative_readerFormatName(
     JNIEnv* env,
     jobject,
     jlong handle) {
@@ -109,7 +109,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_readerFormatName(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_readerRead(
+Java_com_kugou_android_auto_UsbDsdNative_readerRead(
     JNIEnv* env,
     jobject,
     jlong handle,
@@ -132,7 +132,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_readerRead(
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_readerCanReadAt(
+Java_com_kugou_android_auto_UsbDsdNative_readerCanReadAt(
     JNIEnv*,
     jobject,
     jlong handle,
@@ -142,7 +142,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_readerCanReadAt(
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_readerSeekTo(
+Java_com_kugou_android_auto_UsbDsdNative_readerSeekTo(
     JNIEnv*,
     jobject,
     jlong handle,
@@ -152,7 +152,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_readerSeekTo(
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_readerPositionMs(
+Java_com_kugou_android_auto_UsbDsdNative_readerPositionMs(
     JNIEnv*,
     jobject,
     jlong handle) {
@@ -161,7 +161,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_readerPositionMs(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_readerDestroy(
+Java_com_kugou_android_auto_UsbDsdNative_readerDestroy(
     JNIEnv*,
     jobject,
     jlong handle) {
@@ -169,7 +169,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_readerDestroy(
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_dopCreate(
+Java_com_kugou_android_auto_UsbDsdNative_dopCreate(
     JNIEnv*,
     jobject,
     jint channels) {
@@ -181,7 +181,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_dopCreate(
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_nativeDsdCreate(
+Java_com_kugou_android_auto_UsbDsdNative_nativeDsdCreate(
     JNIEnv*,
     jobject,
     jint channels,
@@ -194,7 +194,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_nativeDsdCreate(
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_encoderEncode(
+Java_com_kugou_android_auto_UsbDsdNative_encoderEncode(
     JNIEnv* env,
     jobject,
     jlong handle,
@@ -218,7 +218,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_encoderEncode(
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_encoderEncodeSilence(
+Java_com_kugou_android_auto_UsbDsdNative_encoderEncodeSilence(
     JNIEnv* env,
     jobject,
     jlong handle,
@@ -232,7 +232,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_encoderEncodeSilence(
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_encoderDrain(
+Java_com_kugou_android_auto_UsbDsdNative_encoderDrain(
     JNIEnv* env,
     jobject,
     jlong handle) {
@@ -245,7 +245,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_encoderDrain(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_dopReset(
+Java_com_kugou_android_auto_UsbDsdNative_dopReset(
     JNIEnv*,
     jobject,
     jlong handle) {
@@ -256,7 +256,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_dopReset(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_encoderDestroy(
+Java_com_kugou_android_auto_UsbDsdNative_encoderDestroy(
     JNIEnv*,
     jobject,
     jlong handle) {
@@ -264,7 +264,7 @@ Java_com_afalphy_sylvakru_UsbDsdNative_encoderDestroy(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbDsdNative_nativeDsdBytesPerSample(
+Java_com_kugou_android_auto_UsbDsdNative_nativeDsdBytesPerSample(
     JNIEnv* env,
     jobject,
     jstring format) {

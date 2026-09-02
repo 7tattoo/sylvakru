@@ -130,6 +130,9 @@ class SettingsList extends StatelessWidget {
         if (Platform.isAndroid)
           sliverBox(paddingIfNeed(isLandscape, audioOutputListTile(context))),
 
+        if (Platform.isAndroid)
+          sliverBox(paddingIfNeed(isLandscape, carLyricsListTile(l10n))),
+
         sliverBox(paddingIfNeed(isLandscape, autoPlayOnStartupListTile(l10n))),
 
         if (!isMobile)
@@ -547,6 +550,26 @@ class SettingsList extends StatelessWidget {
         }
         layersManager.pushDetail('settings', 'audio_output');
       },
+    );
+  }
+
+  Widget carLyricsListTile(AppLocalizations l10n) {
+    return ListTile(
+      leading: Icon(Icons.lyrics_rounded, size: iconSize),
+      title: Text(l10n.carLyrics),
+      subtitle: Text(
+        l10n.carLyricsDescription,
+        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+      ),
+      trailing: SizedBox(
+        width: 50,
+        child: MySwitch(
+          valueNotifier: carLyricsEnabledNotifier,
+          onToggleCallBack: () {
+            setting.save();
+          },
+        ),
+      ),
     );
   }
 

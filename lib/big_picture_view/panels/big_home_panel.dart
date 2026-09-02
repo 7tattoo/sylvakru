@@ -34,7 +34,13 @@ class _BigHomePanelState extends State<BigHomePanel> {
     final l10n = AppLocalizations.of(context);
     return ListView(
       controller: verticalController,
-      padding: EdgeInsets.symmetric(vertical: 75 + getTopOffset(context)),
+      padding: EdgeInsets.only(
+        top: 75 + getTopOffset(context),
+        bottom: 20 + MediaQuery.of(context).padding.bottom +
+            MediaQuery.of(context).viewInsets.bottom,
+        left: 40,
+        right: 40,
+      ),
       children: [
         _ListView(
           title: l10n.artists,

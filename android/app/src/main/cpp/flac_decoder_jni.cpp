@@ -31,12 +31,12 @@ jstring nullableError(JNIEnv* env, const std::string& message) {
 }  // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_afalphy_sylvakru_UsbFlacNative_create(JNIEnv*, jobject) {
+Java_com_kugou_android_auto_UsbFlacNative_create(JNIEnv*, jobject) {
     return reinterpret_cast<jlong>(new FlacHandle());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbFlacNative_open(
+Java_com_kugou_android_auto_UsbFlacNative_open(
     JNIEnv* env,
     jobject,
     jlong handle,
@@ -57,7 +57,7 @@ Java_com_afalphy_sylvakru_UsbFlacNative_open(
 }
 
 extern "C" JNIEXPORT jlongArray JNICALL
-Java_com_afalphy_sylvakru_UsbFlacNative_streamInfo(
+Java_com_kugou_android_auto_UsbFlacNative_streamInfo(
     JNIEnv* env,
     jobject,
     jlong handle) {
@@ -78,7 +78,7 @@ Java_com_afalphy_sylvakru_UsbFlacNative_streamInfo(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbFlacNative_readFrames(
+Java_com_kugou_android_auto_UsbFlacNative_readFrames(
     JNIEnv* env,
     jobject,
     jlong handle,
@@ -114,7 +114,7 @@ Java_com_afalphy_sylvakru_UsbFlacNative_readFrames(
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_afalphy_sylvakru_UsbFlacNative_endOfStream(
+Java_com_kugou_android_auto_UsbFlacNative_endOfStream(
     JNIEnv*,
     jobject,
     jlong handle) {
@@ -123,7 +123,7 @@ Java_com_afalphy_sylvakru_UsbFlacNative_endOfStream(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbFlacNative_lastError(
+Java_com_kugou_android_auto_UsbFlacNative_lastError(
     JNIEnv* env,
     jobject,
     jlong handle) {
@@ -135,7 +135,7 @@ Java_com_afalphy_sylvakru_UsbFlacNative_lastError(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbFlacNative_seekToFrame(
+Java_com_kugou_android_auto_UsbFlacNative_seekToFrame(
     JNIEnv* env,
     jobject,
     jlong handle,
@@ -153,7 +153,7 @@ Java_com_afalphy_sylvakru_UsbFlacNative_seekToFrame(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbFlacNative_destroy(
+Java_com_kugou_android_auto_UsbFlacNative_destroy(
     JNIEnv*,
     jobject,
     jlong handle) {

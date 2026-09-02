@@ -44,7 +44,7 @@ jintArray withDescriptors(JNIEnv* env, jbyteArray descriptors, Parse parse) {
 }  // namespace
 
 extern "C" JNIEXPORT jintArray JNICALL
-Java_com_afalphy_sylvakru_UsbUacNative_parseStreamingFormats(
+Java_com_kugou_android_auto_UsbUacNative_parseStreamingFormats(
     JNIEnv* env,
     jobject,
     jbyteArray descriptors) {
@@ -65,7 +65,7 @@ Java_com_afalphy_sylvakru_UsbUacNative_parseStreamingFormats(
 }
 
 extern "C" JNIEXPORT jintArray JNICALL
-Java_com_afalphy_sylvakru_UsbUacNative_findClockSource(
+Java_com_kugou_android_auto_UsbUacNative_findClockSource(
     JNIEnv* env,
     jobject,
     jbyteArray descriptors,
@@ -85,7 +85,7 @@ Java_com_afalphy_sylvakru_UsbUacNative_findClockSource(
 }
 
 extern "C" JNIEXPORT jintArray JNICALL
-Java_com_afalphy_sylvakru_UsbUacNative_parseVolumeFeatures(
+Java_com_kugou_android_auto_UsbUacNative_parseVolumeFeatures(
     JNIEnv* env,
     jobject,
     jbyteArray descriptors) {
@@ -102,7 +102,7 @@ Java_com_afalphy_sylvakru_UsbUacNative_parseVolumeFeatures(
 }
 
 extern "C" JNIEXPORT jintArray JNICALL
-Java_com_afalphy_sylvakru_UsbUacNative_parseOutputTerminalSources(
+Java_com_kugou_android_auto_UsbUacNative_parseOutputTerminalSources(
     JNIEnv* env,
     jobject,
     jbyteArray descriptors) {

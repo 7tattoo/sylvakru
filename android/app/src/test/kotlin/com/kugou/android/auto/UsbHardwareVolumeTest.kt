@@ -1,4 +1,4 @@
-package com.afalphy.sylvakru
+package com.kugou.android.auto
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

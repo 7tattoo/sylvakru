@@ -9,7 +9,7 @@
 #include "usb_dac_quirks.h"
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbDacQuirksNative_matchQuirkIndex(
+Java_com_kugou_android_auto_UsbDacQuirksNative_matchQuirkIndex(
     JNIEnv* env,
     jobject,
     jobjectArray keys,
@@ -38,7 +38,7 @@ Java_com_afalphy_sylvakru_UsbDacQuirksNative_matchQuirkIndex(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbDacQuirksNative_chooseBitPerfectMixerSampleRate(
+Java_com_kugou_android_auto_UsbDacQuirksNative_chooseBitPerfectMixerSampleRate(
     JNIEnv* env,
     jobject,
     jint requested_sample_rate,

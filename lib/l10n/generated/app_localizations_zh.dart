@@ -1088,4 +1088,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bigPictureModeDescription => '解锁大图模式';
+
+  @override
+  String get carLyrics => '车载投屏歌词';
+  @override
+  String get carLyricsDescription => '在 vivo 车载投屏主页显示滚动歌词';
+  @override
+  String get musicSource => '音乐来源';
 }

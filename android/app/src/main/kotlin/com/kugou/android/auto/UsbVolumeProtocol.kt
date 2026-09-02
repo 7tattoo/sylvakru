@@ -1,4 +1,4 @@
-package com.afalphy.sylvakru
+package com.kugou.android.auto
 
 /**
  * usb_volume_protocol.cpp 的 JNI 入口：iBasso HID 音量协议纯逻辑

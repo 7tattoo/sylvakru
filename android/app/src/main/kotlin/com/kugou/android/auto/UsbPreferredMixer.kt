@@ -1,4 +1,4 @@
-package com.afalphy.sylvakru
+package com.kugou.android.auto
 
 // 选择逻辑下沉 usb_dac_quirks.cpp：-1 表示"未指定/无结果"（对应 null）；
 // 请求速率必须恰好命中（不回退到其它位完美速率），未指定时取最大支持速率。

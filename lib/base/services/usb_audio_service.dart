@@ -44,7 +44,7 @@ enum UsbAudioDeviceEventType { added, removed }
 
 class UsbAudioService {
   static const MethodChannel _defaultChannel = MethodChannel(
-    'com.afalphy.sylvakru/usb_audio',
+    'com.kugou.android.auto/usb_audio',
   );
 
   final MethodChannel _channel;

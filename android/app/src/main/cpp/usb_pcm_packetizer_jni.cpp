@@ -58,7 +58,7 @@ jbyteArray toByteArray(JNIEnv* env, const std::vector<uint8_t>& bytes) {
 }  // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_afalphy_sylvakru_UsbPcmNative_create(
+Java_com_kugou_android_auto_UsbPcmNative_create(
     JNIEnv*,
     jobject,
     jint sample_rate,
@@ -81,7 +81,7 @@ Java_com_afalphy_sylvakru_UsbPcmNative_create(
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_afalphy_sylvakru_UsbPcmNative_process(
+Java_com_kugou_android_auto_UsbPcmNative_process(
     JNIEnv* env,
     jobject,
     jlong handle,
@@ -109,7 +109,7 @@ Java_com_afalphy_sylvakru_UsbPcmNative_process(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbPcmNative_beginFadeIn(
+Java_com_kugou_android_auto_UsbPcmNative_beginFadeIn(
     JNIEnv*,
     jobject,
     jlong handle,
@@ -121,7 +121,7 @@ Java_com_afalphy_sylvakru_UsbPcmNative_beginFadeIn(
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_afalphy_sylvakru_UsbPcmNative_transitionTail(
+Java_com_kugou_android_auto_UsbPcmNative_transitionTail(
     JNIEnv* env,
     jobject,
     jlong handle,
@@ -136,7 +136,7 @@ Java_com_afalphy_sylvakru_UsbPcmNative_transitionTail(
 }
 
 extern "C" JNIEXPORT jintArray JNICALL
-Java_com_afalphy_sylvakru_UsbPcmNative_nextPacketBytes(
+Java_com_kugou_android_auto_UsbPcmNative_nextPacketBytes(
     JNIEnv* env,
     jobject,
     jlong handle,
@@ -158,7 +158,7 @@ Java_com_afalphy_sylvakru_UsbPcmNative_nextPacketBytes(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbPcmNative_reset(JNIEnv*, jobject, jlong handle) {
+Java_com_kugou_android_auto_UsbPcmNative_reset(JNIEnv*, jobject, jlong handle) {
     auto* holder = fromHandle(handle);
     if (holder != nullptr) {
         holder->core.reset();
@@ -166,6 +166,6 @@ Java_com_afalphy_sylvakru_UsbPcmNative_reset(JNIEnv*, jobject, jlong handle) {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbPcmNative_destroy(JNIEnv*, jobject, jlong handle) {
+Java_com_kugou_android_auto_UsbPcmNative_destroy(JNIEnv*, jobject, jlong handle) {
     delete fromHandle(handle);
 }

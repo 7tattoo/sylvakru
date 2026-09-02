@@ -1,4 +1,4 @@
-package com.afalphy.sylvakru
+package com.kugou.android.auto
 
 import android.annotation.TargetApi
 import android.app.PendingIntent
@@ -25,10 +25,6 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
-import com.hchen.superlyricapi.SuperLyricData
-import com.hchen.superlyricapi.SuperLyricHelper
-import com.hchen.superlyricapi.SuperLyricLine
-import com.hchen.superlyricapi.SuperLyricWord
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -41,9 +37,8 @@ class MainActivity : AudioServiceActivity(), GamepadsCompatibleActivity {
     var motionListener: ((MotionEvent) -> Boolean)? = null
 
     private val tag = "UsbExclusiveAudioEngine"
-    private val channelName = "com.afalphy.sylvakru/usb_audio"
-    private val superLyricChannelName = "com.afalphy.sylvakru/super_lyric"
-    private val usbPermissionAction = "com.afalphy.sylvakru.USB_PERMISSION"
+    private val channelName = "com.kugou.android.auto/usb_audio"
+    private val usbPermissionAction = "com.kugou.android.auto.USB_PERMISSION"
     private lateinit var usbAudioChannel: MethodChannel
     private lateinit var usbExclusiveAudioEngine: UsbExclusiveAudioEngine
     private var usbAudioDeviceCallback: AudioDeviceCallback? = null
@@ -123,16 +118,6 @@ class MainActivity : AudioServiceActivity(), GamepadsCompatibleActivity {
         registerUsbAudioDeviceCallback()
         registerUsbPermissionReceiver()
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, superLyricChannelName)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "sendLyric" -> result.success(sendSuperLyric(call))
-                    "sendStop" -> result.success(sendSuperLyricStop())
-                    else -> result.notImplemented()
-                }
-            }
-
-        ensureSuperLyricPublisherRegistered()
     }
 
     // 独占播放的音量由应用接管，仅在 Activity 前台拦截手机物理音量键；
@@ -187,7 +172,6 @@ class MainActivity : AudioServiceActivity(), GamepadsCompatibleActivity {
         if (::usbExclusiveAudioEngine.isInitialized) {
             usbExclusiveAudioEngine.release()
         }
-        sendSuperLyricStop()
         super.onDestroy()
     }
 
@@ -583,80 +567,6 @@ class MainActivity : AudioServiceActivity(), GamepadsCompatibleActivity {
         ).also { lastExclusiveProbeResult = it }
     }
 
-    private fun sendSuperLyric(call: MethodCall): Boolean {
-        val lyric = call.argument<String>("lyric")?.trim().orEmpty()
-        if (lyric.isEmpty()) {
-            return sendSuperLyricStop()
-        }
-
-        val startTime = call.argument<Number>("startTime")?.toLong() ?: 0L
-        val endTime = call.argument<Number>("endTime")?.toLong() ?: startTime
-        val words = parseSuperLyricWords(call.argument<List<Any?>>("tokens"))
-
-        return runSuperLyricAction("sendLyric") {
-            SuperLyricHelper.sendLyric(
-                SuperLyricData().setLyric(
-                    if (words.isNotEmpty()) {
-                        SuperLyricLine(lyric, words.toTypedArray(), startTime, endTime)
-                    } else if (endTime > startTime) {
-                        SuperLyricLine(lyric, startTime, endTime)
-                    } else {
-                        SuperLyricLine(lyric)
-                    },
-                ),
-            )
-        }
-    }
-
-    private fun parseSuperLyricWords(tokens: List<Any?>?): List<SuperLyricWord> {
-        return tokens
-            ?.mapNotNull { token ->
-                val map = token as? Map<*, *> ?: return@mapNotNull null
-                val text = map["text"] as? String ?: return@mapNotNull null
-                if (text.isEmpty()) return@mapNotNull null
-
-                val startTime = (map["startTime"] as? Number)?.toLong() ?: return@mapNotNull null
-                val endTime = (map["endTime"] as? Number)?.toLong() ?: return@mapNotNull null
-                SuperLyricWord(text, startTime, endTime)
-            }
-            .orEmpty()
-    }
-
-    private fun sendSuperLyricStop(): Boolean {
-        return runSuperLyricAction("sendStop") {
-            SuperLyricHelper.sendStop(SuperLyricData())
-        }
-    }
-
-    private fun runSuperLyricAction(actionName: String, action: () -> Unit): Boolean {
-        if (!ensureSuperLyricPublisherRegistered()) {
-            return false
-        }
-
-        return try {
-            action()
-            true
-        } catch (error: Throwable) {
-            Log.w("MainActivity", "SuperLyric $actionName failed.", error)
-            false
-        }
-    }
-
-    private fun ensureSuperLyricPublisherRegistered(): Boolean {
-        return try {
-            if (!SuperLyricHelper.isAvailable()) {
-                return false
-            }
-
-            if (!SuperLyricHelper.isPublisherRegistered()) {
-                SuperLyricHelper.registerPublisher()
-            }
-            true
-        } catch (error: Throwable) {
-            Log.w("MainActivity", "SuperLyric service is unavailable.", error)
-            false
-        }
-    }
 
     private fun getStatus(
         preferredApplied: Boolean = false,

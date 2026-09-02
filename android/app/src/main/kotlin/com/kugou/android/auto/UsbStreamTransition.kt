@@ -1,4 +1,4 @@
-package com.afalphy.sylvakru
+package com.kugou.android.auto
 
 internal const val USB_TRANSITION_FADE_MS = 16
 internal const val USB_TRANSITION_OLD_SILENCE_MS = 24

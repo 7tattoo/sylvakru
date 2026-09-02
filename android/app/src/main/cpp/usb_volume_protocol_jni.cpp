@@ -43,7 +43,7 @@ std::vector<int> toIntVector(JNIEnv* env, jintArray values) {
 }  // namespace
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_preferredAutoPcmBitDepth(
+Java_com_kugou_android_auto_UsbVolumeNative_preferredAutoPcmBitDepth(
     JNIEnv* env,
     jobject,
     jboolean has_source_bit_depth,
@@ -56,7 +56,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_preferredAutoPcmBitDepth(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_effectiveVolumeGainQ16(
+Java_com_kugou_android_auto_UsbVolumeNative_effectiveVolumeGainQ16(
     JNIEnv*,
     jobject,
     jint user_gain_q16,
@@ -65,7 +65,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_effectiveVolumeGainQ16(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_effectiveHardwareVolumeGainQ16(
+Java_com_kugou_android_auto_UsbVolumeNative_effectiveHardwareVolumeGainQ16(
     JNIEnv*,
     jobject,
     jint user_gain_q16,
@@ -77,7 +77,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_effectiveHardwareVolumeGainQ16(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoVolumeIndex(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoVolumeIndex(
     JNIEnv*,
     jobject,
     jint gain_q16) {
@@ -85,7 +85,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoVolumeIndex(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoDeviceVolume(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoDeviceVolume(
     JNIEnv*,
     jobject,
     jint index) {
@@ -93,7 +93,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoDeviceVolume(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoDsdVolume(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoDsdVolume(
     JNIEnv*,
     jobject,
     jint base_volume,
@@ -102,7 +102,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoDsdVolume(
 }
 
 extern "C" JNIEXPORT jintArray JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoAppGainToRaw(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoAppGainToRaw(
     JNIEnv* env,
     jobject,
     jint gain_q16,
@@ -114,7 +114,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoAppGainToRaw(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoRawToLinearGainQ16(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoRawToLinearGainQ16(
     JNIEnv*,
     jobject,
     jint raw) {
@@ -122,7 +122,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoRawToLinearGainQ16(
 }
 
 extern "C" JNIEXPORT jintArray JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoDecodeEvent(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoDecodeEvent(
     JNIEnv* env,
     jobject,
     jbyteArray packet) {
@@ -144,7 +144,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoDecodeEvent(
 }
 
 extern "C" JNIEXPORT jintArray JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoRoutePacket(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoRoutePacket(
     JNIEnv* env,
     jobject,
     jbyteArray packet,
@@ -173,7 +173,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoRoutePacket(
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoI2cWritePacket(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoI2cWritePacket(
     JNIEnv* env,
     jobject,
     jint command,
@@ -187,7 +187,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoI2cWritePacket(
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoRoomWritePacket(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoRoomWritePacket(
     JNIEnv* env,
     jobject,
     jint command,
@@ -199,7 +199,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoRoomWritePacket(
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoVolumeReadPacket(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoVolumeReadPacket(
     JNIEnv* env,
     jobject) {
     uint8_t packet[16];
@@ -208,7 +208,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoVolumeReadPacket(
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoVolumePackets(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoVolumePackets(
     JNIEnv* env,
     jobject,
     jint base_raw,
@@ -224,7 +224,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoVolumePackets(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoVolumeVerificationAction(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoVolumeVerificationAction(
     JNIEnv*,
     jobject,
     jint target_raw,
@@ -255,7 +255,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoVolumeVerificationAction(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoReaderRecoveryAction(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoReaderRecoveryAction(
     JNIEnv*,
     jobject,
     jboolean is_dsd,
@@ -274,7 +274,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoReaderRecoveryAction(
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoVolumePendingDelayMs(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoVolumePendingDelayMs(
     JNIEnv*,
     jobject,
     jlong last_completed_at_ms,
@@ -289,7 +289,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoVolumePendingDelayMs(
 }
 
 extern "C" JNIEXPORT jintArray JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoActualEventGainQ16(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoActualEventGainQ16(
     JNIEnv* env,
     jobject,
     jint base_raw,
@@ -301,7 +301,7 @@ Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoActualEventGainQ16(
 }
 
 extern "C" JNIEXPORT jintArray JNICALL
-Java_com_afalphy_sylvakru_UsbVolumeNative_ibassoTargetFromEvent(
+Java_com_kugou_android_auto_UsbVolumeNative_ibassoTargetFromEvent(
     JNIEnv* env,
     jobject,
     jint base_raw,

@@ -23,6 +23,18 @@ final ValueNotifier<Locale?> localeNotifier = ValueNotifier(null);
 
 enum SourceType { local, webdav, subsonic, navidrome, emby }
 
+SourceType sourceType = .navidrome;
+
+bool isStreamSource = true;
+bool isNotStreamSource = false;
+
+final globalNavigatorKey = GlobalKey<NavigatorState>();
+
+final exitOnCloseNotifier = ValueNotifier(false);
+final carLyricsEnabledNotifier = ValueNotifier(true);
+final defaultSortTypeNotifier = ValueNotifier(0);
+final immersiveWideLayoutNotifier = ValueNotifier(true);
+
 final ValueNotifier<String?> fontFamilyNotifier = ValueNotifier(null);
 
 final List<String> importedFonts = [];

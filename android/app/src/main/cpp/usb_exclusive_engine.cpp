@@ -490,12 +490,12 @@ std::string submitFeedbackLocked(Transport& transport) {
 }  // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeCreate(JNIEnv*, jobject) {
+Java_com_kugou_android_auto_UsbExclusiveNative_nativeCreate(JNIEnv*, jobject) {
     return reinterpret_cast<jlong>(new Transport());
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeDestroy(JNIEnv*, jobject, jlong handle) {
+Java_com_kugou_android_auto_UsbExclusiveNative_nativeDestroy(JNIEnv*, jobject, jlong handle) {
     auto* transport = fromHandle(handle);
     if (transport == nullptr) {
         return;
@@ -508,7 +508,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeDestroy(JNIEnv*, jobject, jlo
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeOpen(
+Java_com_kugou_android_auto_UsbExclusiveNative_nativeOpen(
     JNIEnv* env,
     jobject,
     jlong handle,
@@ -600,7 +600,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeOpen(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeWritePcm(
+Java_com_kugou_android_auto_UsbExclusiveNative_nativeWritePcm(
     JNIEnv* env,
     jobject,
     jlong handle,
@@ -651,7 +651,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeWritePcm(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeWriteIsoPackets(
+Java_com_kugou_android_auto_UsbExclusiveNative_nativeWriteIsoPackets(
     JNIEnv* env,
     jobject,
     jlong handle,
@@ -715,7 +715,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeWriteIsoPackets(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeFeedbackFramesPerPacketQ16(
+Java_com_kugou_android_auto_UsbExclusiveNative_nativeFeedbackFramesPerPacketQ16(
     JNIEnv*,
     jobject,
     jlong handle) {
@@ -728,7 +728,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeFeedbackFramesPerPacketQ16(
 }
 
 extern "C" JNIEXPORT jlongArray JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeTransportTelemetry(
+Java_com_kugou_android_auto_UsbExclusiveNative_nativeTransportTelemetry(
     JNIEnv* env,
     jobject,
     jlong handle) {
@@ -761,7 +761,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeTransportTelemetry(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeSetIsoPacketSize(
+Java_com_kugou_android_auto_UsbExclusiveNative_nativeSetIsoPacketSize(
     JNIEnv*,
     jobject,
     jlong handle,
@@ -781,7 +781,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeSetIsoPacketSize(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeSetMaxPendingOutputUrbs(
+Java_com_kugou_android_auto_UsbExclusiveNative_nativeSetMaxPendingOutputUrbs(
     JNIEnv*,
     jobject,
     jlong handle,
@@ -802,7 +802,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeSetMaxPendingOutputUrbs(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeFlushOutput(
+Java_com_kugou_android_auto_UsbExclusiveNative_nativeFlushOutput(
     JNIEnv* env,
     jobject,
     jlong handle) {
@@ -819,7 +819,7 @@ Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeFlushOutput(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_afalphy_sylvakru_UsbExclusiveNative_nativeClose(JNIEnv*, jobject, jlong handle) {
+Java_com_kugou_android_auto_UsbExclusiveNative_nativeClose(JNIEnv*, jobject, jlong handle) {
     auto* transport = fromHandle(handle);
     if (transport == nullptr) {
         return;

@@ -291,14 +291,20 @@
   "audioProcessingWithReplayGain": "{processing} · ReplayGain {gain} dB",
   "@audioProcessingWithReplayGain": {
     "placeholders": {
-      "processing": {"type": "String"},
-      "gain": {"type": "String"}
+      "processing": {
+        "type": "String"
+      },
+      "gain": {
+        "type": "String"
+      }
     }
   },
   "audioProcessingWithReplayGainNotApplied": "{processing} · ReplayGain not applied",
   "@audioProcessingWithReplayGainNotApplied": {
     "placeholders": {
-      "processing": {"type": "String"}
+      "processing": {
+        "type": "String"
+      }
     }
   },
   "replayGain": "ReplayGain",
@@ -340,14 +346,18 @@
   "targetMs": "Target {ms} ms",
   "@targetMs": {
     "placeholders": {
-      "ms": { "type": "int" }
+      "ms": {
+        "type": "int"
+      }
     }
   },
   "buildTargetOnPlay": "Build target level on playback",
   "minimumMs": "Min {ms} ms",
   "@minimumMs": {
     "placeholders": {
-      "ms": { "type": "int" }
+      "ms": {
+        "type": "int"
+      }
     }
   },
   "minimumNone": "Min --",
@@ -367,7 +377,9 @@
   "exportedTo": "Exported to {path}",
   "@exportedTo": {
     "placeholders": {
-      "path": { "type": "String" }
+      "path": {
+        "type": "String"
+      }
     }
   },
   "speaker": "Speaker",
@@ -375,13 +387,17 @@
   "appliedPreference": "{name} · preference applied",
   "@appliedPreference": {
     "placeholders": {
-      "name": { "type": "String" }
+      "name": {
+        "type": "String"
+      }
     }
   },
   "usbOutputLabel": "{name} · USB output",
   "@usbOutputLabel": {
     "placeholders": {
-      "name": { "type": "String" }
+      "name": {
+        "type": "String"
+      }
     }
   },
   "usbDacDetected": "USB DAC detected",
@@ -397,7 +413,6 @@
   "enableExclusive": "Enable exclusive",
   "audioSource": "Audio source",
   "inputSampleRate": "Input sample rate",
-  "bitrate": "Bitrate",
   "processingChain": "Processing chain",
   "dspPlugin": "DSP plugin",
   "notAttached": "Not attached",
@@ -440,5 +455,8 @@
   },
   "trialRemaining": "Trial Remaining",
   "bigPictureMode": "Big Picture Mode",
-  "bigPictureModeDescription": "Unlock Big Picture Mode"
+  "bigPictureModeDescription": "Unlock Big Picture Mode",
+  "carLyrics": "Car Screen Lyrics",
+  "carLyricsDescription": "Show scrolling lyrics on vivo car screen",
+  "musicSource": "Music Source"
 }

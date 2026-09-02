@@ -82,6 +82,20 @@ class Setting {
         json['exitOnClose'] as bool? ?? exitOnCloseNotifier.value;
 
     recursiveScanNotifier.value = json['recursiveScan'] as bool? ?? false;
+
+    carLyricsEnabledNotifier.value =
+        json['carLyricsEnabled'] as bool? ?? true;
+    defaultSortTypeNotifier.value =
+        json['defaultSortType'] as int? ?? defaultSortTypeNotifier.value;
+    final sourceTypeName = json['sourceType'] as String?;
+    if (sourceTypeName != null) {
+      sourceType = SourceType.values.firstWhere(
+        (e) => e.name == sourceTypeName,
+        orElse: () => sourceType,
+      );
+      isStreamSource = sourceType != .local;
+      isNotStreamSource = sourceType == .local;
+    }
   }
 
   void save() {
@@ -112,6 +126,9 @@ class Setting {
         'exitOnClose': exitOnCloseNotifier.value,
 
         'recursiveScan': recursiveScanNotifier.value,
+        'carLyricsEnabled': carLyricsEnabledNotifier.value,
+        'defaultSortType': defaultSortTypeNotifier.value,
+        'sourceType': sourceType.name,
       }),
     );
   }

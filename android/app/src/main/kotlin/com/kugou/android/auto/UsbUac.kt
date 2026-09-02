@@ -1,4 +1,4 @@
-package com.afalphy.sylvakru
+package com.kugou.android.auto
 
 /**
  * usb_uac.cpp 的 JNI 入口：UAC 原始配置描述符的四个无状态解析函数。

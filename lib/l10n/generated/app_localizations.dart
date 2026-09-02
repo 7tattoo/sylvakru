@@ -2225,4 +2225,11 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
     'on GitHub with a reproducible sample app and the gen-l10n configuration '
     'that was used.',
   );
+
+  /// No description provided for @carLyrics.
+  String get carLyrics;
+  /// No description provided for @carLyricsDescription.
+  String get carLyricsDescription;
+  /// No description provided for @musicSource.
+  String get musicSource;
 }

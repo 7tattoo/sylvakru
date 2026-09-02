@@ -15,7 +15,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.afalphy.sylvakru"
+    namespace = "com.kugou.android.auto"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -38,7 +38,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.afalphy.sylvakru"
+        applicationId = "com.kugou.android.auto"
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

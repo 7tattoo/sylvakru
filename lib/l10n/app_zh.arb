@@ -144,7 +144,7 @@
   "recursiveScan": "扫描子目录",
   "songInfo": "歌曲信息",
   "format": "格式",
-  "bitrate": "比特率",
+  "bitrate": "码率",
   "samplerate": "采样率",
   "filePath": "文件路径",
   "path": "路径",
@@ -312,7 +312,6 @@
   "enableExclusive": "启用独占",
   "audioSource": "音频源",
   "inputSampleRate": "输入采样率",
-  "bitrate": "码率",
   "processingChain": "处理链",
   "dspPlugin": "DSP 插件",
   "notAttached": "未接入",
@@ -348,5 +347,8 @@
   "trialRemainingStatus": "高级功能试用中\n剩余 {count} 分钟",
   "trialRemaining": "试用剩余时间",
   "bigPictureMode": "大图模式",
-  "bigPictureModeDescription": "解锁大图模式"
+  "bigPictureModeDescription": "解锁大图模式",
+  "carLyrics": "车载投屏歌词",
+  "carLyricsDescription": "在 vivo 车载投屏主页显示滚动歌词",
+  "musicSource": "音乐来源"
 }

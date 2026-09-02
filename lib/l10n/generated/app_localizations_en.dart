@@ -1113,4 +1113,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bigPictureModeDescription => 'Unlock Big Picture Mode';
+
+  @override
+  String get carLyrics => 'Car Screen Lyrics';
+  @override
+  String get carLyricsDescription => 'Show scrolling lyrics on vivo car screen';
+  @override
+  String get musicSource => 'Music Source';
 }

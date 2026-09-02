@@ -1,4 +1,4 @@
-package com.afalphy.sylvakru
+package com.kugou.android.auto
 
 import android.media.AudioFormat
 import org.junit.Assert.assertEquals

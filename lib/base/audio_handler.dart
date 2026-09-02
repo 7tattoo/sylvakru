@@ -9,7 +9,6 @@ import 'package:sylvakru/base/services/emby_client.dart';
 import 'package:sylvakru/base/services/metadata_service.dart';
 import 'package:sylvakru/base/services/play_queue_logic.dart';
 import 'package:sylvakru/base/services/subsonic_client.dart';
-import 'package:sylvakru/base/services/super_lyric.dart';
 import 'package:sylvakru/base/services/webdav_client.dart';
 import 'package:sylvakru/base/services/color_manager.dart';
 import 'package:sylvakru/base/app.dart';
@@ -112,7 +111,7 @@ Future<void> initAudioService() async {
     builder: () => MyAudioHandler(),
 
     config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.afalphy.sylvakru',
+      androidNotificationChannelId: 'com.kugou.android.auto',
       androidNotificationChannelName: 'Sylvakru',
       androidNotificationOngoing: true,
     ),
@@ -149,7 +148,6 @@ Future<void> initAudioService() async {
 
 class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
   final _player = Player();
-  final _superLyric = SuperLyric();
   bool _started = false;
   int currentIndex = -1;
   List<MyAudioMetadata> _playQueueTmp = [];
@@ -182,6 +180,10 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
   late final File _positionState;
 
   Timer? _positionTimer;
+  Timer? _carLyricTicker;
+  String _lastCarLyricLine = '';
+  String _lastCarLyricWhole = '';
+  String _lastCarLyricSongId = '';
 
   bool isLoading = false;
   bool isSyncing = false;
@@ -251,7 +253,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       if (!isPlayingNotifier.value) {
         return;
       }
-      unawaited(_superLyric.publishAt(position));
     });
 
     usbExclusivePlaybackStateNotifier.addListener(_handleUsbExclusiveState);
@@ -287,6 +288,89 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     );
     if (Platform.isAndroid) {
       WidgetsBinding.instance.addObserver(this);
+    }
+    // React to car lyrics setting changes (vivo car screen MediaItem.extras)
+    carLyricsEnabledNotifier.addListener(() {
+      if (carLyricsEnabledNotifier.value) {
+        if (currentSongNotifier.value != null &&
+            currentSongNotifier.value!.parsedLyrics != null) {
+          if (_carLyricTicker == null) {
+            _startCarLyricTicker();
+          }
+        }
+      } else {
+        _stopCarLyricTicker();
+      }
+    });
+  }
+
+  void _startCarLyricTicker() {
+    _carLyricTicker?.cancel();
+    _carLyricTicker = Timer.periodic(Duration(milliseconds: 250), (_) {
+      _pushCarLyrics();
+    });
+  }
+
+  void _stopCarLyricTicker() {
+    _carLyricTicker?.cancel();
+    _carLyricTicker = null;
+    _lastCarLyricLine = '';
+    _lastCarLyricWhole = '';
+    _lastCarLyricSongId = '';
+  }
+
+  void _pushCarLyrics() {
+    if (!carLyricsEnabledNotifier.value || currentSongNotifier.value == null) {
+      _stopCarLyricTicker();
+      return;
+    }
+    final song = currentSongNotifier.value!;
+    if (song.parsedLyrics == null || song.parsedLyrics!.lines.isEmpty) {
+      return;
+    }
+    final pos = getPosition();
+    final lines = song.parsedLyrics!.lines;
+    int lineIndex = 0;
+    for (int i = 0; i < lines.length; i++) {
+      if (pos >= lines[i].start) {
+        lineIndex = i;
+      } else {
+        break;
+      }
+    }
+    final currentLine = lines[lineIndex].text;
+    // Build whole LRC
+    final sb = StringBuffer();
+    for (final line in lines) {
+      final min = line.start.inMinutes.toString().padLeft(2, '0');
+      final sec = (line.start.inSeconds % 60).toString().padLeft(2, '0');
+      final ms =
+          line.start.inMilliseconds.remainder(1000).toString().padLeft(3, '0');
+      sb.writeln('[$min:$sec.$ms]${line.text}');
+    }
+    final wholeLrc = sb.toString().trim();
+    final lineKey = '$lineIndex|$currentLine';
+    final wholeKey = '$wholeLrc';
+    if (song.id != _lastCarLyricSongId ||
+        lineKey != _lastCarLyricLine ||
+        wholeKey != _lastCarLyricWhole) {
+      _lastCarLyricSongId = song.id;
+      _lastCarLyricLine = lineKey;
+      _lastCarLyricWhole = wholeKey;
+      final extras = <String, dynamic>{
+        'LYRICS_LINE': currentLine,
+        'LYRICS_WHOLE': wholeLrc,
+        'LYRICS_STATUS': 0,
+        'ucar.media.metadata.LYRICS_LINE': currentLine,
+        'ucar.media.metadata.LYRICS_WHOLE': wholeLrc,
+        'ucar.media.metadata.LYRICS_STATUS': 0,
+        'UCAR_TITLE': getTitle(song),
+        'UCAR_ARTIST': getArtist(song),
+      };
+      final currentMedia = mediaItem.value;
+      if (currentMedia != null) {
+        mediaItem.add(currentMedia.copyWith(extras: extras));
+      }
     }
   }
 
@@ -492,7 +576,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       }
       updatePlaybackState(postion: state.position);
       if (state.playing) {
-        unawaited(_superLyric.publishAt(state.position));
       }
       return;
     }
@@ -585,9 +668,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
         } else {
           resource = tmpPath;
         }
-        break;
-      case .subsonic:
-        currentSong.path ??= subsonicClient!.getStreamUrl(currentSong.id);
         break;
       case .navidrome:
         currentSong.path ??= navidromeClient!.getStreamUrl(currentSong.id);
@@ -1075,7 +1155,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       fallbackDb: usbAudioPreferences.replayGainFallbackDbNotifier.value
           .toDouble(),
     );
-    _superLyric.updateLines(currentSong.parsedLyrics!.lines);
 
     currentSongNotifier.value = currentSong;
     unawaited(
@@ -1083,10 +1162,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
         if (generation != _loadGeneration) {
           return;
         }
-        _superLyric.updateLines(currentSong.parsedLyrics!.lines);
         updateLyricsNotifier.value++;
         if (isPlayingNotifier.value) {
-          unawaited(_superLyric.publishAt(getPosition()));
         }
       }).catchError((Object error) {
         logger.output("set lyrics and colors failed:$error");
@@ -1158,10 +1235,7 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
 
     final startPosition = start ?? Duration.zero;
     if (isPlayingNotifier.value) {
-      unawaited(_superLyric.publishAt(startPosition));
     } else {
-      _superLyric.reset();
-      unawaited(_superLyric.sendStop());
     }
     updatePlaybackState(postion: startPosition);
     _prefetchNextSongCache();
@@ -1626,6 +1700,16 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
         duration: currentSong.duration,
       ),
     );
+
+    // Reset car lyric ticker state on song change and (re)start if enabled
+    _lastCarLyricSongId = '';
+    _lastCarLyricLine = '';
+    _lastCarLyricWhole = '';
+    if (carLyricsEnabledNotifier.value && currentSong.parsedLyrics != null) {
+      if (_carLyricTicker == null) {
+        _startCarLyricTicker();
+      }
+    }
   }
 
   @override
@@ -1641,7 +1725,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       );
       updateIsPlaying(state.playing);
       _scheduleOutputGainRamp();
-      unawaited(_superLyric.publishAt(state.position));
       updatePlaybackState(postion: state.position);
       if (state.playing) {
         _startPositionTimer();
@@ -1654,7 +1737,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     final openedExclusive = await _tryOpenUsbExclusive(currentSong);
     if (openedExclusive) {
       await _stopPlayerForUsbExclusive();
-      unawaited(_superLyric.publishAt(_usbExclusivePosition));
       updatePlaybackState(postion: _usbExclusivePosition);
       _startPositionTimer();
       return;
@@ -1664,7 +1746,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     _player.play();
     _scheduleOutputGainRamp();
 
-    unawaited(_superLyric.publishAt(_player.state.position));
     updatePlaybackState();
 
     _startPositionTimer();
@@ -1679,8 +1760,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     );
     if (_usbExclusiveActive) {
       final state = await usbAudioService.pauseExclusivePlayback();
-      unawaited(_superLyric.sendStop());
-      _superLyric.reset();
       updateIsPlaying(state.playing);
       updatePlaybackState(postion: state.position);
       _positionTimer?.cancel();
@@ -1689,8 +1768,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     }
 
     _player.pause();
-    unawaited(_superLyric.sendStop());
-    _superLyric.reset();
     updateIsPlaying(false);
     updatePlaybackState();
     _positionTimer?.cancel();
@@ -1708,8 +1785,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     }
 
     _player.stop();
-    unawaited(_superLyric.sendStop());
-    _superLyric.reset();
     updateIsPlaying(false);
     updatePlaybackState(stop: true);
     _positionTimer?.cancel();
@@ -1722,7 +1797,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     if (_usbExclusiveActive) {
       final state = await usbAudioService.seekExclusivePlayback(position);
       if (isPlayingNotifier.value) {
-        unawaited(_superLyric.publishAt(state.position));
       }
       updateLyricsNotifier.value++;
       updatePlaybackState(postion: state.position);
@@ -1733,7 +1807,6 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     // ensure position is updated
     await Future.delayed(Duration(milliseconds: 50));
     if (isPlayingNotifier.value) {
-      unawaited(_superLyric.publishAt(position));
     }
     updateLyricsNotifier.value++;
   }
