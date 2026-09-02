@@ -12,6 +12,7 @@ import 'package:sylvakru/base/data/artist_album.dart';
 import 'package:sylvakru/base/data/playlist.dart';
 import 'package:sylvakru/base/data/song_list_manager.dart';
 import 'package:sylvakru/base/my_audio_metadata.dart';
+import 'package:sylvakru/base/utils/media_query.dart';
 import 'package:sylvakru/base/services/color_manager.dart';
 import 'package:sylvakru/base/services/metadata_service.dart';
 import 'package:sylvakru/base/utils/metadata_utils.dart';
@@ -751,7 +752,11 @@ void showSongOptions({
         return ConstrainedBox(
           constraints: BoxConstraints(
             maxWidth: max(320, min(MediaQuery.widthOf(context) / 3, 400)),
-            maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+            // 车机 dock 覆盖窗口底部，弹窗高度需扣掉预留区，否则底部选项被挡
+            maxHeight:
+                (MediaQuery.sizeOf(context).height -
+                        getBottomReserve(context)) *
+                    0.8,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -901,7 +906,9 @@ void showSongOptions({
                                     min(MediaQuery.widthOf(context) / 3, 400),
                                   ),
                                   maxHeight:
-                                      MediaQuery.sizeOf(context).height * 0.8,
+                                      (MediaQuery.sizeOf(context).height -
+                                              getBottomReserve(context)) *
+                                          0.8,
                                 ),
                                 child: Padding(
                                   padding: const EdgeInsets.all(10),
