@@ -70,10 +70,12 @@ class _LandscapeLyricsPageState extends State<LandscapeLyricsPage> {
       builder: (context, currentSong, child) {
         final pageWidth = MediaQuery.widthOf(context);
         final pageHight = MediaQuery.heightOf(context);
-        // 封面适当缩小，为封面下方的输出状态胶囊腾出位置
+        final bottomInset = MediaQuery.of(context).padding.bottom +
+            MediaQuery.of(context).viewInsets.bottom;
+        // 封面适当缩小，为封面下方的输出状态胶囊腾出位置；车联横屏不铺满
         final coverArtSize = min(
-          pageWidth * (isMobile ? 0.32 : 0.28),
-          pageHight * (isMobile ? 0.6 : 0.55),
+          pageWidth * (isMobile ? 0.32 : 0.25),
+          pageHight * (isMobile ? 0.6 : 0.45),
         );
 
         return Material(
@@ -159,6 +161,8 @@ class _LandscapeLyricsPageState extends State<LandscapeLyricsPage> {
                         ],
 
                         Spacer(),
+                        // 底部预留 dock / 手势条区域，避免播放控件被遮挡
+                        SizedBox(height: bottomInset),
                       ],
                     ),
                     SizedBox(width: pageWidth * 0.05),
