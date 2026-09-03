@@ -38,7 +38,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.kugou.android.auto"
+        // applicationId 可由 CI 用 APP_ID 环境变量或 -PappId= 覆盖（多包名构建）。
+        // namespace 必须保持 com.kugou.android.auto 不变：Kotlin 包、
+        // JNI 符号 Java_com_kugou_android_auto_* 都绑定在它上面。
+        applicationId = System.getenv("APP_ID")
+            ?: (project.findProperty("appId") as String?)
+            ?: "com.kugou.android.auto"
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
