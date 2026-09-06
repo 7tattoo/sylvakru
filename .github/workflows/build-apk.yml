@@ -74,8 +74,8 @@ jobs:
       run: flutter build apk --release --target-platform android-arm64 --flavor ${{ env.FLUTTER_FLAVOR }}
     - name: Stage APK
       run: "mkdir -p release\nNAME=\"sylvakru-${GITHUB_REF_NAME}-${{ matrix.app_id }}-arm64-v8a.apk\"\nif [ \"${GITHUB_REF_TYPE}\"\
-        \ != \"tag\" ]; then\n  NAME=\"sylvakru-${{ matrix.app_id }}-arm64-v8a.apk\"\nfi\ncp build/app/outputs/flutter-apk/app-release.apk\
-        \ \"release/${NAME}\"\nls -lh release/"
+        \ != \"tag\" ]; then\n  NAME=\"sylvakru-${{ matrix.app_id }}-arm64-v8a.apk\"\nfi\ncp build/app/outputs/flutter-apk/app-${{\
+        \ matrix.flavor }}-release.apk \"release/${NAME}\"\nls -lh release/"
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
