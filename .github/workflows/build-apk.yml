@@ -1,5 +1,4 @@
 name: Build Android APK (arm64-v8a)
-
 on:
   push:
     branches: [ "main" ]
@@ -10,7 +9,6 @@ on:
 
 permissions:
   contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,38 +17,46 @@ jobs:
       matrix:
         include:
           - app_id: com.kugou.android.auto
+            flavor: kugou
             label: kugou-auto
           - app_id: com.tencent.ibg.joox
+            flavor: joox
             label: joox
           - app_id: com.spotify.music
+            flavor: spotify
             label: spotify
           - app_id: com.apple.android.music
+            flavor: apple
             label: apple-music
           - app_id: com.luna.music.car
+            flavor: luna
             label: luna-car
           - app_id: cn.kuwo.kwmusiccar
+            flavor: kuwo
             label: kuwo-car
           - app_id: com.qidian.QDReader
+            flavor: qidian
             label: qidian
           - app_id: com.tencent.weread
+            flavor: weread
             label: weread
           - app_id: cn.aqzscn.stream_music
+            flavor: streammusic
             label: stream-music
           - app_id: com.tencent.wecarflow
+            flavor: wecarflow
             label: wecarflow
           - app_id: com.netease.cloudmusic.iot
+            flavor: neteaseiot
             label: netease-cloudmusic-iot
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -60,12 +66,12 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
-      - name: Build APK (arm64-v8a release, ${{ matrix.app_id }})
+      - name: Build APK (arm64-v8a release, ${{ matrix.flavor }})
         env:
           APP_ID: ${{ matrix.app_id }}
-        run: flutter build apk --release --target-platform android-arm64
-
+          FLUTTER_FLAVOR: ${{ matrix.flavor }}
+        run: |
+          flutter build apk --release --target-platform android-arm64 --flavor ${{ env.FLUTTER_FLAVOR }}
       - name: Stage APK
         run: |
           mkdir -p release
@@ -75,14 +81,12 @@ jobs:
           fi
           cp build/app/outputs/flutter-apk/app-release.apk "release/${NAME}"
           ls -lh release/
-
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: sylvakru-${{ matrix.label }}-arm64-v8a
           path: release/*.apk
           retention-days: 30
-
       - name: Publish to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
