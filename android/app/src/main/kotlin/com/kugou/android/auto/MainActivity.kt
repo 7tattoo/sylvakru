@@ -19,7 +19,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
-import android.support.v4.media.MediaSessionCompat
+import android.support.v4.media.session.MediaSessionCompat
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.hardware.input.InputManager
@@ -54,9 +54,11 @@ class MainActivity : AudioServiceActivity(), GamepadsCompatibleActivity {
     private var atomicLrcKey: String? = null
     private var atomicLrcAtMs = 0L
 
-    // vivo 原子随身听（原子通知歌词）：嵌套 Bundle 事件无法经 audio_service 的
-    // 平面 extras 透传，必须在原生侧补写进 MediaMetadata。25 秒限频重发同一曲目
-    // （media_id 幂等），非就绪态不发事件；键名 meida/meidia 为官方既定错拼，勿改。
+    // vivo 原子随身听（原子通知歌词）：能力位 support_event=31 由 Dart 侧随
+    // MediaItem.extras 写进 metadata（audio_service 把平面 extras 透传为 metadata
+    // 键值，Integer/Long → putLong）；原生侧只负责 `MediaSessionCompat.setExtras()`
+    // 的 `lrc_change` 事件通道。25 秒限频重发同一曲目（media_id 幂等），
+    // 非就绪态不发事件；键名 meida/meidia 为官方既定错拼，勿改。
     private fun pushAtomicLyrics(songId: String, lrc: String): Boolean {
         if (songId.isEmpty() || lrc.isEmpty()) return false
         val key = "$songId|${lrc.hashCode()}"
@@ -65,26 +67,25 @@ class MainActivity : AudioServiceActivity(), GamepadsCompatibleActivity {
         atomicLrcKey = key
         atomicLrcAtMs = now
         val session = try {
+            // AudioService.instance 与 mediaSession 均为包私有字段，跨包必须走反射
+            val inst = AudioService::class.java.getDeclaredField("instance")
+                .apply { isAccessible = true }.get(null) ?: return false
             val f = AudioService::class.java.getDeclaredField("mediaSession")
             f.isAccessible = true
-            f.get(AudioService.instance) as? MediaSessionCompat
+            f.get(inst) as? MediaSessionCompat
         } catch (e: Throwable) {
             Log.w(tag, "atomic lyrics: no media session: ${e.message}")
             null
         } ?: return false
-        val event = Bundle().apply {
-            putString("vivomusicmix.meida.extra.key.action", "lrc_change") // 官方错拼
-            putString("vivomusicmix.extra.key.lyric", lrc)
-            putString("vivomusicmix.extra.key.meidia_id", songId) // 官方错拼
-        }
-        val extras = Bundle().apply {
-            putInt("vivomusicmix.media.metadata.support_event", 31)
-            putBundle("vivomusicmix.media.metadata.event", event)
-        }
         return try {
-            val metadata = session.controller.metadata
-            session.setMetadata(
-                MediaMetadataCompat.Builder(metadata).apply { setExtras(extras) }.build(),
+            // lrc_change 事件：三个协议键平铺进 session extras（对齐 NeriPlayer 已验证实现，
+            // 不嵌套 Bundle）。action 值必须是完整事件名 vivomusicmix.extra.lrc_change。
+            session.setExtras(
+                Bundle().apply {
+                    putString("vivomusicmix.meida.extra.key.action", "vivomusicmix.extra.lrc_change")
+                    putString("vivomusicmix.extra.key.meidia_id", songId) // 官方错拼
+                    putString("vivomusicmix.extra.key.lyric", lrc)
+                },
             )
             true
         } catch (e: Throwable) {

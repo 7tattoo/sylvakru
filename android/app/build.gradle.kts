@@ -132,6 +132,10 @@ flutter {
     source = "../.."
 }
 dependencies {
+    // MainActivity.pushAtomicLyrics 使用 android.support.v4.media.MediaSessionCompat /
+    // MediaMetadataCompat（原子随身听歌词协议）。audio_service 插件以 implementation
+    // 方式依赖 androidx.media，不会传递到 app 编译 classpath，必须显式声明。
+    implementation("androidx.media:media:1.7.0")
     implementation("com.github.HChenX:SuperLyricApi:3.4")
     testImplementation("junit:junit:4.13.2")
     // JVM 单测里没有 Android 运行时自带的 org.json

@@ -383,6 +383,9 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
         mediaItem.add(
           currentMedia.copyWith(
             extras: <String, dynamic>{
+              // 原子随身听能力位（播控|歌词|进度条 = 31）：必须落在 metadata（Long），
+              // 合作控制器 c0 才会显示歌词区；经 audio_service 的平面 extras 透传。
+              'vivomusicmix.media.metadata.support_event': 31,
               'ucar.media.metadata.LYRICS_WHOLE': wholeLrc,
               'ucar.media.metadata.LYRICS_STATUS': 0,
             },

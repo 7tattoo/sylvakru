@@ -59,6 +59,8 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
+                <!-- 框架 MediaBrowser 只按此 action 绑定，缺失则原子随身听拿不到 session token -->
+                <action android:name="android.media.browse.MediaBrowserService" />
                 <action android:name="com.vivo.musicwidgetmix.support.service" />
             </intent-filter>
         </service>
