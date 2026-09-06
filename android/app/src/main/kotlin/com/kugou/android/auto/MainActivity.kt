@@ -14,9 +14,12 @@ import android.media.AudioManager
 import android.media.AudioMixerAttributes
 import android.media.AudioTrack
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
+import android.support.v4.media.MediaSessionCompat
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.hardware.input.InputManager
@@ -25,6 +28,7 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
+import com.ryanheise.audioservice.AudioService
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -46,11 +50,68 @@ class MainActivity : AudioServiceActivity(), GamepadsCompatibleActivity {
     private var pendingExclusiveProbeDevice: UsbDevice? = null
     private var usbPermissionReceiver: BroadcastReceiver? = null
     private var lastExclusiveProbeResult: Map<String, Any?>? = null
+    private var atomicLyricsChannel: MethodChannel? = null
+    private var atomicLrcKey: String? = null
+    private var atomicLrcAtMs = 0L
+
+    // vivo 原子随身听（原子通知歌词）：嵌套 Bundle 事件无法经 audio_service 的
+    // 平面 extras 透传，必须在原生侧补写进 MediaMetadata。25 秒限频重发同一曲目
+    // （media_id 幂等），非就绪态不发事件；键名 meida/meidia 为官方既定错拼，勿改。
+    private fun pushAtomicLyrics(songId: String, lrc: String): Boolean {
+        if (songId.isEmpty() || lrc.isEmpty()) return false
+        val key = "$songId|${lrc.hashCode()}"
+        val now = SystemClock.elapsedRealtime()
+        if (key == atomicLrcKey && now - atomicLrcAtMs < 25_000L) return false
+        atomicLrcKey = key
+        atomicLrcAtMs = now
+        val session = try {
+            val f = AudioService::class.java.getDeclaredField("mediaSession")
+            f.isAccessible = true
+            f.get(AudioService.instance) as? MediaSessionCompat
+        } catch (e: Throwable) {
+            Log.w(tag, "atomic lyrics: no media session: ${e.message}")
+            null
+        } ?: return false
+        val event = Bundle().apply {
+            putString("vivomusicmix.meida.extra.key.action", "lrc_change") // 官方错拼
+            putString("vivomusicmix.extra.key.lyric", lrc)
+            putString("vivomusicmix.extra.key.meidia_id", songId) // 官方错拼
+        }
+        val extras = Bundle().apply {
+            putInt("vivomusicmix.media.metadata.support_event", 31)
+            putBundle("vivomusicmix.media.metadata.event", event)
+        }
+        return try {
+            val metadata = session.controller.metadata
+            session.setMetadata(
+                MediaMetadataCompat.Builder(metadata).apply { setExtras(extras) }.build(),
+            )
+            true
+        } catch (e: Throwable) {
+            Log.w(tag, "atomic lyrics push failed: ${e.message}")
+            false
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
         usbAudioChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
+        atomicLyricsChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.kugou.android.auto/atomic_lyrics",
+        )
+        atomicLyricsChannel!!.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getStatus" -> result.success(mapOf("packageName" to packageName))
+                "pushLyrics" -> {
+                    val songId = call.argument<String>("songId") ?: ""
+                    val lrc = call.argument<String>("lrc") ?: ""
+                    result.success(pushAtomicLyrics(songId, lrc))
+                }
+                else -> result.notImplemented()
+            }
+        }
         usbExclusiveAudioEngine = UsbExclusiveAudioEngine(
             this,
             emitState = { state ->

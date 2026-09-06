@@ -57,6 +57,10 @@
             android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+                <action android:name="com.vivo.musicwidgetmix.support.service" />
+            </intent-filter>
         </service>
 
 

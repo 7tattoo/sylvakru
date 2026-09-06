@@ -36,6 +36,10 @@ jobs:
             label: weread
           - app_id: cn.aqzscn.stream_music
             label: stream-music
+          - app_id: com.tencent.wecarflow
+            label: wecarflow
+          - app_id: com.netease.cloudmusic.iot
+            label: netease-cloudmusic-iot
 
     steps:
       - name: Checkout

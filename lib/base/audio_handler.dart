@@ -3,7 +3,9 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:sylvakru/base/services/emby_client.dart';
 import 'package:sylvakru/base/services/metadata_service.dart';
@@ -181,9 +183,14 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
 
   Timer? _positionTimer;
   Timer? _carLyricTicker;
-  String _lastCarLyricLine = '';
-  String _lastCarLyricWhole = '';
   String _lastCarLyricSongId = '';
+  DateTime? _lastCarLrcPushAt;
+  DateTime? _lastCarPlaybackSyncAt;
+
+  // vivo 原子随身听歌词通道（嵌套 Bundle 在原生侧补写）
+  final MethodChannel _atomicLyricsChannel = const MethodChannel(
+    'com.kugou.android.auto/atomic_lyrics',
+  );
 
   bool isLoading = false;
   bool isSyncing = false;
@@ -253,8 +260,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       if (!isPlayingNotifier.value) {
         return;
       }
-      // 车载歌词也由播放器位置流驱动：应用退到后台后 Dart 定时器会被系统
-      // 节流甚至暂停，只靠 Timer 会让车机歌词卡在最后一次推送的位置。
+      // 车载歌词与 PlaybackState 锚点由播放器位置流驱动：应用退到后台后 Dart
+      // 定时器会被系统节流甚至暂停，只靠 Timer 会让车机歌词卡在最后一次推送。
       _pushCarLyrics();
     });
 
@@ -307,20 +314,26 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     });
   }
 
+  // 后台兜底：位置流停转（系统冻结定时器）时每秒补推一次，_pushCarLyrics 内部幂等。
   void _startCarLyricTicker() {
     _carLyricTicker?.cancel();
-    _carLyricTicker = Timer.periodic(Duration(milliseconds: 250), (_) {
+    _carLyricTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       _pushCarLyrics();
     });
   }
+
   void _stopCarLyricTicker() {
     _carLyricTicker?.cancel();
     _carLyricTicker = null;
-    _lastCarLyricLine = '';
-    _lastCarLyricWhole = '';
     _lastCarLyricSongId = '';
+    _lastCarLrcPushAt = null;
+    _lastCarPlaybackSyncAt = null;
   }
 
+  // v4.0 车联协议：extras 只写 ucar.media.metadata.LYRICS_WHOLE + LYRICS_STATUS=0。
+  // 禁止键（写了车机不消费且干扰解析）：LYRICS_LINE、裸 LYRICS_WHOLE/LYRICS_STATUS、
+  // UCAR_TITLE/UCAR_ARTIST（标题与歌手一律走 MediaItem 标准字段）。
+  // 静默策略：加载/解析/无歌词一律不写歌词键；滚动由车机按 PlaybackState 自行完成。
   void _pushCarLyrics() {
     if (!carLyricsEnabledNotifier.value || currentSongNotifier.value == null) {
       return;
@@ -330,19 +343,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       return;
     }
     final pos = getPosition();
-    final lines = song.parsedLyrics!.lines;
-    int lineIndex = 0;
-    for (int i = 0; i < lines.length; i++) {
-      if (pos >= lines[i].start) {
-        lineIndex = i;
-      } else {
-        break;
-      }
-    }
-    final currentLine = lines[lineIndex].text;
-    // Build whole LRC
     final sb = StringBuffer();
-    for (final line in lines) {
+    for (final line in song.parsedLyrics!.lines) {
       final min = line.start.inMinutes.toString().padLeft(2, '0');
       final sec = (line.start.inSeconds % 60).toString().padLeft(2, '0');
       final ms =
@@ -350,31 +352,59 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       sb.writeln('[$min:$sec.$ms]${line.text}');
     }
     final wholeLrc = sb.toString().trim();
-    final lineKey = '$lineIndex|$currentLine';
-    final wholeKey = '$wholeLrc';
-    if (song.id != _lastCarLyricSongId ||
-        lineKey != _lastCarLyricLine ||
-        wholeKey != _lastCarLyricWhole) {
+    final now = DateTime.now();
+    final songChanged = song.id != _lastCarLyricSongId;
+    final resyncNeeded =
+        songChanged ||
+        _lastCarPlaybackSyncAt == null ||
+        now.difference(_lastCarPlaybackSyncAt!).inMilliseconds >= 1000;
+    if (songChanged) {
       _lastCarLyricSongId = song.id;
-      _lastCarLyricLine = lineKey;
-      _lastCarLyricWhole = wholeKey;
-      final extras = <String, dynamic>{
-        'LYRICS_LINE': currentLine,
-        'LYRICS_WHOLE': wholeLrc,
-        'LYRICS_STATUS': 0,
-        'ucar.media.metadata.LYRICS_LINE': currentLine,
-        'ucar.media.metadata.LYRICS_WHOLE': wholeLrc,
-        'ucar.media.metadata.LYRICS_STATUS': 0,
-        'UCAR_TITLE': getTitle(song),
-        'UCAR_ARTIST': getArtist(song),
-      };
-      final currentMedia = mediaItem.value;
-      if (currentMedia != null) {
-        mediaItem.add(currentMedia.copyWith(extras: extras));
-      }
+      _lastCarLrcPushAt = null;
+    }
+    if (resyncNeeded) {
+      _lastCarPlaybackSyncAt = now;
       // 车机的播放状态卡片依赖 playbackState 的位置/状态，后台时也要同步刷新
       updatePlaybackState(postion: pos);
     }
+    if (wholeLrc.isEmpty) {
+      return;
+    }
+    // 车联 extras 同曲只推一次；歌词晚到经 _setLyricsAndUpdateColors 补推。
+    // 原子协议按 v4.0 第 9 章约 25 秒限频重发，原生侧另有同窗幂等闸门。
+    final atomicDue =
+        songChanged ||
+        _lastCarLrcPushAt == null ||
+        now.difference(_lastCarLrcPushAt!).inMilliseconds >= 25000;
+    if (songChanged || _lastCarLrcPushAt == null) {
+      _lastCarLrcPushAt = now;
+      final currentMedia = mediaItem.value;
+      if (currentMedia != null) {
+        mediaItem.add(
+          currentMedia.copyWith(
+            extras: <String, dynamic>{
+              'ucar.media.metadata.LYRICS_WHOLE': wholeLrc,
+              'ucar.media.metadata.LYRICS_STATUS': 0,
+            },
+          ),
+        );
+      }
+    }
+    if (atomicDue) {
+      _pushAtomicLyrics(song.id, wholeLrc);
+    }
+  }
+
+  void _pushAtomicLyrics(String songId, String lrc) {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    unawaited(
+      _atomicLyricsChannel.invokeMethod<bool>('pushLyrics', {
+        'songId': songId,
+        'lrc': lrc,
+      }),
+    );
   }
 
   void _handleReplayGainMetadataChanged() {
@@ -574,7 +604,7 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       }
       // 独占播放时，位置由独占链路上报，驱动进度流。
       _positionController.add(state.position);
-      // 独占链路也要驱动车载歌词，否则后台时车机歌词不滚动。
+      // 独占链路也要驱动车载歌词与 PlaybackState 锚点，否则后台时车机歌词不滚动。
       _pushCarLyrics();
       if (isPlayingNotifier.value != state.playing) {
         updateIsPlaying(state.playing);
@@ -1100,6 +1130,8 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
     int? generation,
   }) async {
     await setParsedLyrics(song);
+    // 歌词晚于曲目就绪（网络/解析）：就绪即补推一次车联与原子歌词
+    _pushCarLyrics();
     final coverArtColor = await computeCoverArtColor(song);
     // 异步获取期间用户已切到别的歌：不把过期配色覆盖到当前界面
     if (generation != null && generation != _loadGeneration) {
@@ -1706,14 +1738,15 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
       ),
     );
 
-    // Reset car lyric ticker state on song change and (re)start if enabled
-    _lastCarLyricSongId = '';
-    _lastCarLyricLine = '';
-    _lastCarLyricWhole = '';
+    // 切歌即清当前 extras 中的旧歌词（静默策略：新曲歌词未就绪不携带任何键），
+    // ticker 状态随之复位；新曲歌词就绪后由位置流/补推路径重新写入。
+    _stopCarLyricTicker();
     if (carLyricsEnabledNotifier.value && currentSong.parsedLyrics != null) {
-      if (_carLyricTicker == null) {
-        _startCarLyricTicker();
-      }
+      _startCarLyricTicker();
+    }
+    final currentMedia = mediaItem.value;
+    if (currentMedia != null && currentMedia.extras != null) {
+      mediaItem.add(currentMedia.copyWith(extras: null));
     }
   }
 
