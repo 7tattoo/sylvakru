@@ -1,15 +1,16 @@
 name: Build Android APK (arm64-v8a)
-on:
+'on':
   push:
-    branches: [ "main" ]
-    tags: [ "v*" ]
+    branches:
+    - main
+    tags:
+    - v*
   pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:
-
+    branches:
+    - main
+  workflow_dispatch: {}
 permissions:
   contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,81 +18,75 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - app_id: com.kugou.android.auto
-            flavor: kugou
-            label: kugou-auto
-          - app_id: com.tencent.ibg.joox
-            flavor: joox
-            label: joox
-          - app_id: com.spotify.music
-            flavor: spotify
-            label: spotify
-          - app_id: com.apple.android.music
-            flavor: apple
-            label: apple-music
-          - app_id: com.luna.music.car
-            flavor: luna
-            label: luna-car
-          - app_id: cn.kuwo.kwmusiccar
-            flavor: kuwo
-            label: kuwo-car
-          - app_id: com.qidian.QDReader
-            flavor: qidian
-            label: qidian
-          - app_id: com.tencent.weread
-            flavor: weread
-            label: weread
-          - app_id: cn.aqzscn.stream_music
-            flavor: streammusic
-            label: stream-music
-          - app_id: com.tencent.wecarflow
-            flavor: wecarflow
-            label: wecarflow
-          - app_id: com.netease.cloudmusic.iot
-            flavor: neteaseiot
-            label: netease-cloudmusic-iot
+        - app_id: com.kugou.android.auto
+          flavor: kugou
+          label: kugou-auto
+        - app_id: com.tencent.ibg.joox
+          flavor: joox
+          label: joox
+        - app_id: com.spotify.music
+          flavor: spotify
+          label: spotify
+        - app_id: com.apple.android.music
+          flavor: apple
+          label: apple-music
+        - app_id: com.luna.music.car
+          flavor: luna
+          label: luna-car
+        - app_id: cn.kuwo.kwmusiccar
+          flavor: kuwo
+          label: kuwo-car
+        - app_id: com.qidian.QDReader
+          flavor: qidian
+          label: qidian
+        - app_id: com.tencent.weread
+          flavor: weread
+          label: weread
+        - app_id: cn.aqzscn.stream_music
+          flavor: streammusic
+          label: stream-music
+        - app_id: com.tencent.wecarflow
+          flavor: wecarflow
+          label: wecarflow
+        - app_id: com.netease.cloudmusic.iot
+          flavor: neteaseiot
+          label: netease-cloudmusic-iot
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.44.5'
-          channel: stable
-          cache: true
-      - name: Install dependencies
-        run: flutter pub get
-      - name: Build APK (arm64-v8a release, ${{ matrix.flavor }})
-        env:
-          APP_ID: ${{ matrix.app_id }}
-          FLUTTER_FLAVOR: ${{ matrix.flavor }}
-        run: |
-          flutter build apk --release --target-platform android-arm64 --flavor ${{ env.FLUTTER_FLAVOR }}
-      - name: Stage APK
-        run: |
-          mkdir -p release
-          NAME="sylvakru-${GITHUB_REF_NAME}-${{ matrix.app_id }}-arm64-v8a.apk"
-          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
-            NAME="sylvakru-${{ matrix.app_id }}-arm64-v8a.apk"
-          fi
-          cp build/app/outputs/flutter-apk/app-release.apk "release/${NAME}"
-          ls -lh release/
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sylvakru-${{ matrix.label }}-arm64-v8a
-          path: release/*.apk
-          retention-days: 30
-      - name: Publish to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release/*.apk
-          generate_release_notes: true
-          draft: false
-          prerelease: false
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Set up Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: 3.44.5
+        channel: stable
+        cache: true
+    - name: Install dependencies
+      run: flutter pub get
+    - name: Build APK (arm64-v8a release, ${{ matrix.flavor }})
+      env:
+        APP_ID: ${{ matrix.app_id }}
+        FLUTTER_FLAVOR: ${{ matrix.flavor }}
+      run: flutter build apk --release --target-platform android-arm64 --flavor ${{ env.FLUTTER_FLAVOR }}
+    - name: Stage APK
+      run: "mkdir -p release\nNAME=\"sylvakru-${GITHUB_REF_NAME}-${{ matrix.app_id }}-arm64-v8a.apk\"\nif [ \"${GITHUB_REF_TYPE}\"\
+        \ != \"tag\" ]; then\n  NAME=\"sylvakru-${{ matrix.app_id }}-arm64-v8a.apk\"\nfi\ncp build/app/outputs/flutter-apk/app-release.apk\
+        \ \"release/${NAME}\"\nls -lh release/"
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: sylvakru-${{ matrix.label }}-arm64-v8a
+        path: release/*.apk
+        retention-days: 30
+    - name: Publish to GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: release/*.apk
+        generate_release_notes: true
+        draft: false
+        prerelease: false
