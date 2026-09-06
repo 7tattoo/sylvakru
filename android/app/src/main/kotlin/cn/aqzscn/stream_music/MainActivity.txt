@@ -1,4 +1,5 @@
-package com.kugou.android.auto
+package cn.aqzscn.stream_music
+
 import android.annotation.TargetApi
 import android.app.PendingIntent
 import android.content.BroadcastReceiver

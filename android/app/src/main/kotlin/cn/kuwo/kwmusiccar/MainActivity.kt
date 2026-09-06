@@ -1,4 +1,5 @@
-package com.kugou.android.auto
+package cn.kuwo.kwmusiccar
+
 import android.annotation.TargetApi
 import android.app.PendingIntent
 import android.content.BroadcastReceiver

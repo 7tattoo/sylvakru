@@ -1,4 +1,5 @@
-package com.kugou.android.auto
+package com.netease.cloudmusic.iot
+
 import android.annotation.TargetApi
 import android.app.PendingIntent
 import android.content.BroadcastReceiver

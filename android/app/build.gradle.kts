@@ -1,9 +1,7 @@
 import java.util.Properties
 import java.io.FileInputStream
-
 plugins {
     id("com.android.application")
-
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -13,21 +11,64 @@ val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
-
 android {
     namespace = "com.kugou.android.auto"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
-
+    flavorDimensions = "app_id"
+    productFlavors {
+        kugou {
+            dimension = "app_id"
+            applicationId = "com.kugou.android.auto"
+        }
+        joox {
+            dimension = "app_id"
+            applicationId = "com.tencent.ibg.joox"
+        }
+        spotify {
+            dimension = "app_id"
+            applicationId = "com.spotify.music"
+        }
+        apple {
+            dimension = "app_id"
+            applicationId = "com.apple.android.music"
+        }
+        luna {
+            dimension = "app_id"
+            applicationId = "com.luna.music.car"
+        }
+        kuwo {
+            dimension = "app_id"
+            applicationId = "cn.kuwo.kwmusiccar"
+        }
+        qidian {
+            dimension = "app_id"
+            applicationId = "com.qidian.QDReader"
+        }
+        weread {
+            dimension = "app_id"
+            applicationId = "com.tencent.weread"
+        }
+        streammusic {
+            dimension = "app_id"
+            applicationId = "cn.aqzscn.stream_music"
+        }
+        wecarflow {
+            dimension = "app_id"
+            applicationId = "com.tencent.wecarflow"
+        }
+        neteaseiot {
+            dimension = "app_id"
+            applicationId = "com.netease.cloudmusic.iot"
+        }
+    }
     signingConfigs {
         create("release") {
             keyAlias = keystoreProperties.getProperty("keyAlias")
@@ -36,33 +77,27 @@ android {
             storePassword = keystoreProperties.getProperty("storePassword")
         }
     }
-
     defaultConfig {
-        // applicationId 可由 CI 用 APP_ID 环境变量或 -PappId= 覆盖（多包名构建）。
-        // namespace 必须保持 com.kugou.android.auto 不变：Kotlin 包、
+        // applicationId 由 productFlavors 中的 applicationId 自动注入，
+        // 移除单一 defaultConfig.applicationId 以避免冲突。
+        // namespace 保持 com.kugou.android.auto 不变：Kotlin 包、
         // JNI 符号 Java_com_kugou_android_auto_* 都绑定在它上面。
-        applicationId = System.getenv("APP_ID")
-            ?: (project.findProperty("appId") as String?)
-            ?: "com.kugou.android.auto"
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
         externalNativeBuild {
             cmake {
                 cppFlags += listOf("-std=c++17", "-Wall", "-Wextra")
             }
         }
     }
-
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
         }
     }
-
     buildTypes {
         release {
             signingConfig = if (keystorePropertiesFile.exists()) {
@@ -72,7 +107,7 @@ android {
             }
         }
         debug {
-            applicationIdSuffix = ".debug" 
+            applicationIdSuffix = ".debug"
         }
         maybeCreate("profile").apply {
             initWith(getByName("debug"))
@@ -80,20 +115,17 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
-
     configurations.all {
         resolutionStrategy {
             force("androidx.appcompat:appcompat:1.6.1")
             force("androidx.fragment:fragment:1.6.2")
         }
     }
-    
-}
 
+}
 flutter {
     source = "../.."
 }
-
 dependencies {
     implementation("com.github.HChenX:SuperLyricApi:3.4")
     testImplementation("junit:junit:4.13.2")
