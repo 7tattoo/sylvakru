@@ -3,6 +3,7 @@ import java.io.FileInputStream
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -19,52 +20,49 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
-    }
-    flavorDimensions = "app_id"
+    flavorDimensions += "app_id"
     productFlavors {
-        kugou {
+        create("kugou") {
             dimension = "app_id"
             applicationId = "com.kugou.android.auto"
         }
-        joox {
+        create("joox") {
             dimension = "app_id"
             applicationId = "com.tencent.ibg.joox"
         }
-        spotify {
+        create("spotify") {
             dimension = "app_id"
             applicationId = "com.spotify.music"
         }
-        apple {
+        create("apple") {
             dimension = "app_id"
             applicationId = "com.apple.android.music"
         }
-        luna {
+        create("luna") {
             dimension = "app_id"
             applicationId = "com.luna.music.car"
         }
-        kuwo {
+        create("kuwo") {
             dimension = "app_id"
             applicationId = "cn.kuwo.kwmusiccar"
         }
-        qidian {
+        create("qidian") {
             dimension = "app_id"
             applicationId = "com.qidian.QDReader"
         }
-        weread {
+        create("weread") {
             dimension = "app_id"
             applicationId = "com.tencent.weread"
         }
-        streammusic {
+        create("streammusic") {
             dimension = "app_id"
             applicationId = "cn.aqzscn.stream_music"
         }
-        wecarflow {
+        create("wecarflow") {
             dimension = "app_id"
             applicationId = "com.tencent.wecarflow"
         }
-        neteaseiot {
+        create("neteaseiot") {
             dimension = "app_id"
             applicationId = "com.netease.cloudmusic.iot"
         }
@@ -123,6 +121,13 @@ android {
     }
 
 }
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+    }
+}
+
 flutter {
     source = "../.."
 }
