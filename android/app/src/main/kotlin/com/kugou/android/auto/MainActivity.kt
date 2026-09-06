@@ -18,6 +18,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.DisplayMetrics
 import android.util.Log
 import android.support.v4.media.session.MediaSessionCompat
 import android.view.KeyEvent
@@ -59,6 +60,23 @@ class MainActivity : AudioServiceActivity(), GamepadsCompatibleActivity {
     // 键值，Integer/Long → putLong）；原生侧只负责 `MediaSessionCompat.setExtras()`
     // 的 `lrc_change` 事件通道。25 秒限频重发同一曲目（media_id 幂等），
     // 非就绪态不发事件；键名 meida/meidia 为官方既定错拼，勿改。
+    // 车联 dock 的两种布局方式：
+    // 1) 系统把应用窗口排在 dock 上方（窗口底边 < 屏幕底边）→ 窗口内不需要再为
+    //    dock 预留空间，Dart 侧据此关掉 16% 兜底；
+    // 2) 窗口全屏、dock 由车载桌面绘制在窗口之上 → 仍按比例预留。
+    private fun windowDockMetrics(): Map<String, Int> {
+        val decor = window.decorView
+        val loc = IntArray(2)
+        decor.getLocationOnScreen(loc)
+        val metrics = DisplayMetrics()
+        @Suppress("DEPRECATION")
+        windowManager.defaultDisplay.getRealMetrics(metrics)
+        return mapOf(
+            "windowBottomOnScreen" to (loc[1] + decor.height),
+            "displayHeight" to metrics.heightPixels,
+        )
+    }
+
     private fun pushAtomicLyrics(songId: String, lrc: String): Boolean {
         if (songId.isEmpty() || lrc.isEmpty()) return false
         val key = "$songId|${lrc.hashCode()}"
@@ -105,6 +123,7 @@ class MainActivity : AudioServiceActivity(), GamepadsCompatibleActivity {
         atomicLyricsChannel!!.setMethodCallHandler { call, result ->
             when (call.method) {
                 "getStatus" -> result.success(mapOf("packageName" to packageName))
+                "windowMetrics" -> result.success(windowDockMetrics())
                 "pushLyrics" -> {
                     val songId = call.argument<String>("songId") ?: ""
                     val lrc = call.argument<String>("lrc") ?: ""

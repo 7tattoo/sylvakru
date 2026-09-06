@@ -16,6 +16,7 @@ import 'package:sylvakru/base/services/color_manager.dart';
 import 'package:sylvakru/base/app.dart';
 import 'package:sylvakru/base/services/logger.dart';
 import 'package:sylvakru/base/services/lyric.dart';
+import 'package:sylvakru/base/utils/media_query.dart';
 import 'package:sylvakru/base/utils/path.dart';
 import 'package:sylvakru/base/widgets/equalizer.dart';
 import 'package:sylvakru/base/widgets/lyric_list_view.dart';
@@ -187,10 +188,32 @@ class MyAudioHandler extends BaseAudioHandler with WidgetsBindingObserver {
   DateTime? _lastCarLrcPushAt;
   DateTime? _lastCarPlaybackSyncAt;
 
-  // vivo 原子随身听歌词通道（嵌套 Bundle 在原生侧补写）
+  // vivo 原子随身听歌词通道（嵌套 Bundle 在原生侧补写）；
+  // windowMetrics 也走此通道：上报窗口与物理屏幕的几何关系，供车机自适应布局用。
   final MethodChannel _atomicLyricsChannel = const MethodChannel(
     'com.kugou.android.auto/atomic_lyrics',
   );
+
+  /// 探测应用窗口底边与物理屏幕底边的关系（仅 Android）。
+  /// 窗口底边高于屏幕底边 → 车联 dock 在窗口之外 → 关掉 16% 兜底预留，
+  /// 主界面贴到窗口底边自适应 dock 高度；探测失败保持 false（安全默认）。
+  Future<void> refreshWindowDockMetrics() async {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    try {
+      final res = await _atomicLyricsChannel
+          .invokeMethod<Map<dynamic, dynamic>>('windowMetrics');
+      final windowBottom = (res?['windowBottomOnScreen'] as num?)?.toInt() ?? 0;
+      final displayHeight = (res?['displayHeight'] as num?)?.toInt() ?? 0;
+      if (windowBottom > 0 && displayHeight > 0) {
+        // 8px 容差：窗口底边恰好贴住屏幕底边时仍视为贴底（dock 盖在窗口上）
+        windowAboveDockNotifier.value = windowBottom < displayHeight - 8;
+      }
+    } catch (_) {
+      // 通道不可用（非车机/桌面端）：保留原值即可
+    }
+  }
 
   bool isLoading = false;
   bool isSyncing = false;

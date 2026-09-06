@@ -56,6 +56,7 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
     super.initState();
     if (Platform.isAndroid) {
       WidgetsBinding.instance.addObserver(this);
+      windowAboveDockNotifier.addListener(_rebuildForDockMetrics);
     }
 
     if (autoPlayOnStartupNotifier.value && currentSongNotifier.value != null) {
@@ -81,9 +82,32 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
       } else if (Platform.isMacOS) {
         await NativeMenu.initIcons();
       }
+      // 首帧后探测窗口与物理屏幕几何（车机 dock 自适应）；窗口 attach 晚于
+      // 首帧时 bounds 可能为 0，延迟补探一次
+      if (Platform.isAndroid) {
+        audioHandler.refreshWindowDockMetrics();
+        Timer(const Duration(seconds: 2), () {
+          audioHandler.refreshWindowDockMetrics();
+        });
+      }
     });
 
     networkErrorNotifier.addListener(_onNetworkError);
+  }
+
+  void _rebuildForDockMetrics() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void didChangeMetrics() {
+    // 窗口尺寸/位置变化（投屏接入、旋转、分屏）后重探 dock 几何
+    audioHandler.refreshWindowDockMetrics();
+    Timer(const Duration(seconds: 2), () {
+      audioHandler.refreshWindowDockMetrics();
+    });
   }
 
   // Server clients report failures here since they have no BuildContext of
@@ -100,6 +124,7 @@ class _ViewEntryState extends State<ViewEntry> with WidgetsBindingObserver {
   void dispose() {
     if (Platform.isAndroid) {
       WidgetsBinding.instance.removeObserver(this);
+      windowAboveDockNotifier.removeListener(_rebuildForDockMetrics);
     }
     networkErrorNotifier.removeListener(_onNetworkError);
     super.dispose();
